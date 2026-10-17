@@ -15,7 +15,7 @@ DATASET_PATH = "data/features.parquet"
 
 
 def fetch_redata_structure(
-    start_year: int = 2024, end_year: int = 2024
+    start_year: int = 2024, end_year: int = 2025
 ) -> Optional[pd.DataFrame]:
     """
     Obtiene la estructura de generacion diaria de REData realizando peticiones

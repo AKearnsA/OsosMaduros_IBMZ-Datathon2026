@@ -4,26 +4,31 @@
 *.token
 .env
 .env.*
+!.env.example
 secrets/
 
 # Python
 __pycache__/
 *.pyc
+*.pyo
 .venv/
 venv/
+*.egg-info/
+.pytest_cache/
+
+# Data and models (never commit raw data or heavy LLM/ML weights)
+data/raw/
+data/*.csv
+data/*.parquet
+!data/**/.gitkeep
+models/*.gguf
+*.joblib
+*.onnx
 
 # Jupyter
 .ipynb_checkpoints/
 
-# Data and models (large files)
-data/raw/
-data/*.csv
-data/*.parquet
-*.joblib
-*.onnx
-*.gguf
-
-# OS / editor
+# System / IDEs
 .DS_Store
 Thumbs.db
 .idea/

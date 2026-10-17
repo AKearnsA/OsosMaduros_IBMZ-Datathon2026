@@ -26,7 +26,7 @@ Source: REData (Red Electrica), peninsular system, daily resolution (MWh/day con
 | `gen_sync_mw` | float | Nuclear, hydro, gas, coal, etc. (synchronous) |
 | `nonsync_share` | float | `gen_nonsync_mw / gen_total_mw`, range 0-1 |
 | `interconnection_balance_mw` | float | Scheduled net imports (+) / exports (-), all borders |
-| `label_event` | int, nullable | 1 only for an observed instability event (28 Apr 2025 blackout); null otherwise. Do not train on it |
+| `label_event` | int (0/1) | 1 only for an observed instability event (28 Apr 2025 blackout); 0 otherwise. Do not train on it |
 | `label_proxy` | int (0/1) | Proxy label: 1 if `nonsync_share > 0.55`. Training target |
 | `inertia_est_gws` | float | Estimated kinetic energy, sum(H_i * P_i) in GW*s (H per technology, see `data/ingest_apis.py`) |
 | `rocof_est_hz_s` | float | Estimated initial RoCoF for a 1,000 MW loss with the peninsular system isolated: dP * f0 / (2 * E) |

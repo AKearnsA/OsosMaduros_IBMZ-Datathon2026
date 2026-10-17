@@ -98,7 +98,7 @@ def normalize_tech_name(name: str) -> str:
 def add_labels(df: pd.DataFrame, local_dates: pd.Series) -> pd.DataFrame:
     """label_event solo para eventos observados; la regla proxy va en label_proxy."""
     is_event = local_dates.isin(OBSERVED_EVENT_DATES)
-    df["label_event"] = pd.array(np.where(is_event, 1, pd.NA), dtype="Int8")
+    df["label_event"] = is_event.to_numpy().astype("int8")
     df["label_proxy"] = (df["nonsync_share"] > NONSYNC_PROXY_THRESHOLD).astype("int8")
     return df
 

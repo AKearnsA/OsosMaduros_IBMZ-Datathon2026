@@ -5,35 +5,28 @@ from typing import Tuple, List
 
 MODEL_PATH = os.getenv("GRID_MODEL_PATH", "model/grid_model.joblib")
 
+
 class GridPredictor:
     def __init__(self, model_path: str = MODEL_PATH):
         if not os.path.exists(model_path):
-            raise FileNotFoundError(f"No se encontró el artefacto en {model_path}.")
-        
+            raise FileNotFoundError(f"No se encontró el archivo del modelo en {model_path}")
+
         loaded = joblib.load(model_path)
         
-        # Si el objeto guardado es un diccionario con artefactos
-        if isinstance(loaded, dict):
-            # Intenta obtener el regresor con varias claves comunes o el valor directo
-            self.model = loaded.get("regressor") or loaded.get("model") or loaded.get("grid_model")
-            self.p75 = loaded.get("p75", 0.3401)
-            self.p95 = loaded.get("p95", 0.4019)
-            self.feature_names = loaded.get("feature_names", [
-                "nonsync_share", "interconnection_balance_mw", "demand_mw",
-                "inertia_est_gws", "rocof_lag_1d", "rocof_ma_7d", "month", "dayofweek"
-            ])
-        else:
-            # Si se guardó el modelo directamente en el joblib
-            self.model = loaded
-            self.p75 = 0.3401
-            self.p95 = 0.4019
-            self.feature_names = [
-                "nonsync_share", "interconnection_balance_mw", "demand_mw",
-                "inertia_est_gws", "rocof_lag_1d", "rocof_ma_7d", "month", "dayofweek"
-            ]
+        if not isinstance(loaded, dict):
+            raise ValueError(f"Se esperaba un diccionario en {model_path}, pero se obtuvo {type(loaded)}")
+
+        # Extracción alineada con las claves reales de tu artefacto
+        self.model = loaded.get("regressor_model")
+        self.p75 = loaded.get("percentile_75", 0.3401)
+        self.p95 = loaded.get("percentile_95", 0.4019)
+        self.feature_names = loaded.get("feature_names", [
+            "nonsync_share", "interconnection_balance_mw", "demand_mw",
+            "inertia_est_gws", "rocof_lag_1d", "rocof_ma_7d", "month", "dayofweek"
+        ])
 
         if self.model is None:
-            raise ValueError(f"No se pudo extraer el modelo del archivo {model_path}.")
+            raise ValueError(f"No se encontró 'regressor_model' dentro de {model_path}")
 
     def predict(self, data: dict) -> Tuple[float, str, List[str]]:
         gen_total = data["gen_total_mw"] if data["gen_total_mw"] > 0 else 1.0
@@ -55,14 +48,15 @@ class GridPredictor:
             "dayofweek": [dt.dayofweek]
         }
 
-        # Filtrar solo las columnas que espera el modelo
         df_input = pd.DataFrame(features_dict)
+        
+        # Filtrar solo las columnas que el RandomForest espera
         cols_to_use = [col for col in self.feature_names if col in df_input.columns]
         X = df_input[cols_to_use] if cols_to_use else df_input
 
         pred_rocof = float(self.model.predict(X)[0])
 
-        # Mapeo según percentiles históricos
+        # Mapeo por percentiles de riesgo
         if pred_rocof < self.p75:
             level = "Stable"
             risk_score = round(min(0.50, max(0.0, (pred_rocof / self.p75) * 0.50)), 2)

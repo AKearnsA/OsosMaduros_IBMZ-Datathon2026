@@ -215,7 +215,7 @@ def daily_total(records: list[dict], index: pd.Index) -> pd.Series:
 
 
 def fetch_redata_structure(
-    start_year: int = 2024, end_year: int = 2025
+    start_year: int = 2021, end_year: int = 2025
 ) -> Optional[pd.DataFrame]:
     """
     Obtiene de REData (sistema peninsular, resolucion diaria) la estructura de

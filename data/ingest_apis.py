@@ -21,7 +21,11 @@ DATASET_PATH = "data/features.parquet"
 # fastparquet: instala en s390x sin compilar Arrow (ver requirements.txt).
 PARQUET_ENGINE = "fastparquet"
 
-REDATA_URL = "https://apidatos.ree.es/es/datos/generacion/estructura-generacion"
+REDATA_BASE_URL = "https://apidatos.ree.es/es/datos"
+GENERATION_ENDPOINT = "generacion/estructura-generacion"
+DEMAND_ENDPOINT = "demanda/evolucion"
+# Saldo programado (el endpoint de flujos fisicos no esta disponible).
+EXCHANGES_ENDPOINT = "intercambios/todas-fronteras-programados"
 # Sistema peninsular: Baleares y Canarias son sistemas aislados con su propia frecuencia.
 REDATA_GEO_PARAMS = "&geo_trunc=electric_system&geo_limit=peninsular&geo_ids=8741"
 
@@ -68,20 +72,9 @@ def add_labels(df: pd.DataFrame, local_dates: pd.Series) -> pd.DataFrame:
     return df
 
 
-def fetch_redata_structure(
-    start_year: int = 2024, end_year: int = 2025
-) -> Optional[pd.DataFrame]:
-    """
-    Obtiene la estructura de generacion diaria peninsular de REData realizando
-    peticiones por bloques mensuales para evitar limites de la API.
-    """
-    headers = {
-        "Accept": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-    }
-
-    all_records = []
-
+def month_ranges(start_year: int, end_year: int) -> list[tuple[str, str]]:
+    """Bloques mensuales (inicio, fin) para no superar los limites de la API."""
+    ranges = []
     for year in range(start_year, end_year + 1):
         for month in range(1, 13):
             start_date = f"{year}-{month:02d}-01T00:00"
@@ -91,47 +84,111 @@ def fetch_redata_structure(
                 next_month_first = datetime(year, month + 1, 1)
                 last_day = next_month_first - timedelta(days=1)
                 end_date = f"{last_day.strftime('%Y-%m-%d')}T23:59"
+            ranges.append((start_date, end_date))
+    return ranges
 
-            url = (
-                f"{REDATA_URL}?start_date={start_date}&end_date={end_date}"
-                f"&time_trunc=day{REDATA_GEO_PARAMS}"
+
+def fetch_redata_block(endpoint: str, start_date: str, end_date: str) -> list[dict]:
+    """Descarga un bloque diario peninsular de REData; devuelve 'included' o []."""
+    headers = {
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+    }
+    url = (
+        f"{REDATA_BASE_URL}/{endpoint}?start_date={start_date}&end_date={end_date}"
+        f"&time_trunc=day{REDATA_GEO_PARAMS}"
+    )
+
+    try:
+        response = requests.get(url, headers=headers, timeout=12)
+        if response.ok:
+            return response.json().get("included", [])
+        print(
+            f"[!] Error en {endpoint} bloque {start_date[:7]} "
+            f"[HTTP {response.status_code}]"
+        )
+    except Exception as e:
+        print(f"[!] Excepcion consultando {endpoint} bloque {start_date[:7]}: {e}")
+    return []
+
+
+def parse_generation(included: list[dict]) -> list[dict]:
+    """Energia diaria (MWh) por tecnologia."""
+    records = []
+    for item in included:
+        attributes = item.get("attributes", {})
+        tech_title = attributes.get("title", item.get("type", "Desconocido"))
+        for entry in attributes.get("values", []):
+            records.append(
+                {
+                    "datetime_local": entry.get("datetime"),
+                    "tech": normalize_tech_name(tech_title),
+                    "value_mwh": entry.get("value", 0.0),
+                }
             )
+    return records
 
-            try:
-                response = requests.get(url, headers=headers, timeout=12)
 
-                if response.ok:
-                    json_data = response.json()
-                    included = json_data.get("included", [])
+def parse_demand(included: list[dict]) -> list[dict]:
+    """Demanda diaria (MWh)."""
+    return [
+        {"datetime_local": entry.get("datetime"), "value_mwh": entry.get("value")}
+        for item in included
+        for entry in item.get("attributes", {}).get("values", [])
+    ]
 
-                    for item in included:
-                        attributes = item.get("attributes", {})
-                        tech_title = attributes.get(
-                            "title", item.get("type", "Desconocido")
-                        )
-                        values = attributes.get("values", [])
 
-                        for entry in values:
-                            all_records.append(
-                                {
-                                    "datetime_local": entry.get("datetime"),
-                                    "tech": normalize_tech_name(tech_title),
-                                    "value_mwh": entry.get("value", 0.0),
-                                }
-                            )
-                else:
-                    print(
-                        f"[!] Error en bloque {start_date[:7]} [HTTP {response.status_code}]"
-                    )
+def parse_exchanges(included: list[dict]) -> list[dict]:
+    """Saldo diario (MWh) por frontera: + importacion, - exportacion."""
+    records = []
+    for country in included:
+        for series in country.get("attributes", {}).get("content", []):
+            if series.get("type") != "saldo":
+                continue
+            for entry in series.get("attributes", {}).get("values", []):
+                records.append(
+                    {
+                        "datetime_local": entry.get("datetime"),
+                        "value_mwh": entry.get("value"),
+                    }
+                )
+    return records
 
-            except Exception as e:
-                print(f"[!] Excepcion consultando bloque {start_date[:7]}: {e}")
 
-    if not all_records:
+def daily_total(records: list[dict], index: pd.Index) -> pd.Series:
+    """Suma por dia y alinea con los dias de generacion (NaN si falta el dato)."""
+    if not records:
+        return pd.Series(np.nan, index=index)
+    df = pd.DataFrame(records)
+    return df.groupby("datetime_local")["value_mwh"].sum().reindex(index)
+
+
+def fetch_redata_structure(
+    start_year: int = 2024, end_year: int = 2025
+) -> Optional[pd.DataFrame]:
+    """
+    Obtiene de REData (sistema peninsular, resolucion diaria) la estructura de
+    generacion, la demanda y el saldo de intercambios internacionales,
+    realizando peticiones por bloques mensuales.
+    """
+    gen_records, demand_records, exchange_records = [], [], []
+
+    for start_date, end_date in month_ranges(start_year, end_year):
+        gen_records += parse_generation(
+            fetch_redata_block(GENERATION_ENDPOINT, start_date, end_date)
+        )
+        demand_records += parse_demand(
+            fetch_redata_block(DEMAND_ENDPOINT, start_date, end_date)
+        )
+        exchange_records += parse_exchanges(
+            fetch_redata_block(EXCHANGES_ENDPOINT, start_date, end_date)
+        )
+
+    if not gen_records:
         print("[!] No se pudieron obtener registros de REData.")
         return None
 
-    df_raw = pd.DataFrame(all_records)
+    df_raw = pd.DataFrame(gen_records)
     df_raw = df_raw[~df_raw["tech"].isin(EXCLUDED_TECHS)]
 
     # Energia diaria (MWh) por tecnologia; una fila por dia.
@@ -157,14 +214,16 @@ def fetch_redata_structure(
         df_features["gen_nonsync_mw"] / df_features["gen_total_mw"]
     ).clip(0.0, 1.0)
 
-    # Sin fuente real todavia: se dejan vacias en lugar de inventarlas.
-    for col in [
-        "demand_mw",
-        "interconnection_balance_mw",
-        "frequency_hz",
-        "rocof_hz_s",
-    ]:
-        df_features[col] = np.nan
+    df_features["demand_mw"] = (
+        daily_total(demand_records, df_features.index) / hours_per_day
+    )
+    df_features["interconnection_balance_mw"] = (
+        daily_total(exchange_records, df_features.index) / hours_per_day
+    )
+
+    # REData no publica la frecuencia: se dejan vacias en lugar de inventarlas.
+    df_features["frequency_hz"] = np.nan
+    df_features["rocof_hz_s"] = np.nan
 
     df_features = df_features.reset_index()
     local_dates = df_features["datetime_local"].str[:10]
@@ -172,7 +231,9 @@ def fetch_redata_structure(
     df_features = add_labels(df_features, local_dates)
 
     print(
-        f"[OK] Se obtuvieron {len(df_features)} dias reales de REData (sistema peninsular)."
+        f"[OK] Se obtuvieron {len(df_features)} dias reales de REData (sistema peninsular); "
+        f"demanda en {df_features['demand_mw'].notna().sum()}, "
+        f"intercambios en {df_features['interconnection_balance_mw'].notna().sum()}."
     )
     return df_features
 

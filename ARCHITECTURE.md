@@ -14,19 +14,24 @@ data -> features file -> model -> inference service -> explanation -> dashboard
 | Explanation | `explain/` | The JSON risk result | Short plain-language text for the operator |
 | Dashboard / demo | `app/` | Historical replay + service | Live-style view for the demo video |
 
-## features.parquet (proposed columns)
+## features.parquet (columns)
+Source: REData (Red Electrica), peninsular system, daily resolution (MWh/day converted to average MW). Written with `fastparquet`.
+
 | Column | Type | Unit / meaning |
 |---|---|---|
-| `timestamp` | datetime (UTC) | Start of the interval |
-| `demand_mw` | float | Demand |
-| `gen_total_mw` | float | Total generation |
-| `gen_nonsync_mw` | float | Wind + solar PV (non-synchronous) |
-| `gen_sync_mw` | float | Nuclear, hydro, gas, etc. (synchronous) |
+| `timestamp` | string, ISO 8601 UTC (`YYYY-MM-DDTHH:MM:SSZ`) | Start of the interval (local midnight for daily data) |
+| `demand_mw` | float | Demand (REData `demanda/evolucion`) |
+| `gen_total_mw` | float | Total generation (sum of technologies, excluding the API's own "Generacion total" row) |
+| `gen_nonsync_mw` | float | Wind + solar PV + solar thermal (non-synchronous, team decision) |
+| `gen_sync_mw` | float | Nuclear, hydro, gas, coal, etc. (synchronous) |
 | `nonsync_share` | float | `gen_nonsync_mw / gen_total_mw`, range 0-1 |
-| `interconnection_balance_mw` | float | Net imports (+) / exports (-) |
-| `frequency_hz` | float, nullable | Only if available at sufficient resolution |
-| `rocof_hz_s` | float, nullable | Only computed from suitable frequency data |
-| `label_event` | int, nullable | 1 if an observed instability event; keep proxy labels in a separate column `label_proxy` |
+| `interconnection_balance_mw` | float | Scheduled net imports (+) / exports (-), all borders |
+| `label_event` | int, nullable | 1 only for an observed instability event (28 Apr 2025 blackout); null otherwise. Do not train on it |
+| `label_proxy` | int (0/1) | Proxy label: 1 if `nonsync_share > 0.55`. Training target |
+| `inertia_est_gws` | float | Estimated kinetic energy, sum(H_i * P_i) in GW*s (H per technology, see `data/ingest_apis.py`) |
+| `rocof_est_hz_s` | float | Estimated initial RoCoF for a 1,000 MW loss with the peninsular system isolated: dP * f0 / (2 * E) |
+
+Measured frequency and RoCoF (`frequency_hz`, `rocof_hz_s`) were dropped: no open source publishes them without a token. `inertia_est_gws` and `rocof_est_hz_s` are physical estimates, not measurements.
 
 ## Inference result (JSON)
 ```json

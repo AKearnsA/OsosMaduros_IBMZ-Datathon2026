@@ -35,6 +35,37 @@ NONSYNC_TECHS = {"eolica", "solar fotovoltaica", "solar termica"}
 # Subtotal que ya devuelve la API: sumarlo duplicaria la generacion.
 EXCLUDED_TECHS = {"generacion total"}
 
+# Constante de inercia tipica H [s] por tecnologia con masa rotativa.
+# Fuente: OECD-NEA (2020), "Operation and control of power systems with reduced
+# synchronous inertia", diapositiva 25 (Continental Europe, EUCO30 & TYNDP2018).
+# Eolica y FV no aportan inercia (H = 0). La solar termica cuenta como no sincrona
+# en nonsync_share, pero su turbina de vapor si aporta inercia fisica.
+INERTIA_H_SECONDS = {
+    "eolica": 0.0,
+    "solar fotovoltaica": 0.0,
+    "solar termica": 3.0,  # Solar-thermal
+    "nuclear": 6.0,  # Nuclear
+    "carbon": 4.1,  # Hard coal
+    "ciclo combinado": 4.3,  # Gas
+    "fuel + gas": 4.3,  # Oil (THN)
+    "turbina de vapor": 4.3,  # Oil (THN)
+    "turbina de gas": 4.3,  # Gas
+    "motores diesel": 4.3,  # Oil (THN)
+    "hidraulica": 4.0,  # Hydro-dam (mayoritaria en la peninsula)
+    "otras renovables": 3.3,  # Biofuels
+    "residuos renovables": 3.3,  # Biofuels
+    "cogeneracion": 3.7,  # Other non-RES
+    "residuos no renovables": 3.7,  # Other non-RES
+}
+# Tecnologia no listada arriba.
+DEFAULT_H_SECONDS = 3.7
+# H medio usado solo en el fallback sintetico (sin desglose por tecnologia).
+FALLBACK_H_SECONDS = 4.3
+
+NOMINAL_FREQUENCY_HZ = 50.0
+# Perdida de referencia para el RoCoF estimado: un grupo nuclear grande (~1 GW).
+REFERENCE_LOSS_MW = 1000.0
+
 # Dias (hora peninsular) con un evento de inestabilidad observado y documentado.
 OBSERVED_EVENT_DATES = {"2025-04-28"}  # Apagon iberico
 
@@ -49,10 +80,10 @@ REQUIRED_COLUMNS = [
     "gen_sync_mw",
     "nonsync_share",
     "interconnection_balance_mw",
-    "frequency_hz",
-    "rocof_hz_s",
     "label_event",
     "label_proxy",
+    "inertia_est_gws",
+    "rocof_est_hz_s",
 ]
 
 
@@ -69,6 +100,26 @@ def add_labels(df: pd.DataFrame, local_dates: pd.Series) -> pd.DataFrame:
     is_event = local_dates.isin(OBSERVED_EVENT_DATES)
     df["label_event"] = pd.array(np.where(is_event, 1, pd.NA), dtype="Int8")
     df["label_proxy"] = (df["nonsync_share"] > NONSYNC_PROXY_THRESHOLD).astype("int8")
+    return df
+
+
+def add_inertia_estimates(
+    df: pd.DataFrame, kinetic_energy_mws: pd.Series
+) -> pd.DataFrame:
+    """
+    Estimaciones fisicas (no medidas) a partir del mix de generacion. Sustituyen
+    a la frecuencia medida, que no publica ninguna fuente abierta sin token:
+    - inertia_est_gws: energia cinetica E = sum(H_i * P_i), en GW*s. Usa la
+      potencia media generada como aproximacion de la potencia nominal en linea,
+      por lo que tiende a infraestimar la inercia (criterio conservador).
+    - rocof_est_hz_s: RoCoF inicial ante la perdida de REFERENCE_LOSS_MW con el
+      sistema peninsular aislado: RoCoF = dP * f0 / (2 * E).
+    """
+    kinetic_energy_mws = kinetic_energy_mws.where(kinetic_energy_mws > 0)
+    df["inertia_est_gws"] = kinetic_energy_mws / 1000.0
+    df["rocof_est_hz_s"] = (
+        REFERENCE_LOSS_MW * NOMINAL_FREQUENCY_HZ / (2.0 * kinetic_energy_mws)
+    )
     return df
 
 
@@ -221,9 +272,16 @@ def fetch_redata_structure(
         daily_total(exchange_records, df_features.index) / hours_per_day
     )
 
-    # REData no publica la frecuencia: se dejan vacias en lugar de inventarlas.
-    df_features["frequency_hz"] = np.nan
-    df_features["rocof_hz_s"] = np.nan
+    unknown_techs = [c for c in df_pivoted.columns if c not in INERTIA_H_SECONDS]
+    if unknown_techs:
+        print(
+            f"[!] Sin H especifico, se usa {DEFAULT_H_SECONDS} s para: {unknown_techs}"
+        )
+    h_by_tech = pd.Series(
+        {c: INERTIA_H_SECONDS.get(c, DEFAULT_H_SECONDS) for c in df_pivoted.columns}
+    )
+    kinetic_energy_mws = df_pivoted.mul(h_by_tech, axis=1).sum(axis=1) / hours_per_day
+    df_features = add_inertia_estimates(df_features, kinetic_energy_mws)
 
     df_features = df_features.reset_index()
     local_dates = df_features["datetime_local"].str[:10]
@@ -266,10 +324,9 @@ def generate_fallback_data(hours: int = 168) -> pd.DataFrame:
             "gen_sync_mw": np.round(gen_sync, 2),
             "nonsync_share": np.round(nonsync_share, 4),
             "interconnection_balance_mw": np.round(np.random.normal(-500, 300, n), 2),
-            "frequency_hz": np.round(np.random.normal(50.0, 0.02, n), 3),
-            "rocof_hz_s": np.round(np.random.normal(0.0, 0.005, n), 4),
         }
     )
+    df = add_inertia_estimates(df, df["gen_sync_mw"] * FALLBACK_H_SECONDS)
     # Ningun evento observado en datos sinteticos.
     return add_labels(df, pd.Series([""] * n))
 

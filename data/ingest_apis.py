@@ -1,3 +1,9 @@
+
+"""
+Módulo de Ingesta de Datos y Conectores para GridZ Shield.
+Conecta con la API pública de Red Eléctrica (REData) y genera data/features.parquet.
+"""
+
 import os
 import requests
 import pandas as pd
@@ -7,87 +13,114 @@ from typing import Optional
 
 DATASET_PATH = "data/features.parquet"
 
-def fetch_redata_structure(start_date: str = None, end_date: str = None) -> Optional[pd.DataFrame]:
-    """
-    Obtiene la estructura de generación de la API pública de REData (Red Eléctrica).
-    """
-    # Usar formato simple YYYY-MM-DD que no requiere codificar caracteres especiales
-    if not start_date or not end_date:
-        yesterday = datetime.now(timezone.utc) - timedelta(days=1)
-        seven_days_ago = yesterday - timedelta(days=7)
-        start_date = seven_days_ago.strftime("%Y-%m-%d")
-        end_date = yesterday.strftime("%Y-%m-%d")
 
-    # Pasar los parámetros de fecha directamente formateados en la URL
-    url = (
-        f"https://apidatos.ree.es/es/datos/generacion/estructura-generacion"
-        f"?start_date={start_date}T00:00&end_date={end_date}T23:59&time_trunc=hour&geo_limit=peninsular"
-    )
-    
+def fetch_redata_structure(
+    start_year: int = 2024, end_year: int = 2024
+) -> Optional[pd.DataFrame]:
+    """
+    Obtiene la estructura de generación diaria de REData realizando peticiones
+    por bloques mensuales para evitar límites de la API.
+    """
     headers = {
         "Accept": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
     }
 
-    try:
-        # Llamada sin 'params' para evitar que requests recodifique 'T00:00' como '%3A'
-        response = requests.get(url, headers=headers, timeout=12)
-        response.raise_for_status()
-        json_data = response.json()
-        
-        # ... resto del código sin cambios ...
+    all_records = []
 
-        included = json_data.get("included", [])
-        records = []
+    # Iterar mes a mes para el rango de años especificado
+    for year in range(start_year, end_year + 1):
+        for month in range(1, 13):
+            # Calcular primer y último día del mes
+            start_date = f"{year}-{month:02d}-01T00:00"
+            if month == 12:
+                end_date = f"{year}-12-31T23:59"
+            else:
+                next_month_first = datetime(year, month + 1, 1)
+                last_day = next_month_first - timedelta(days=1)
+                end_date = f"{last_day.strftime('%Y-%m-%d')}T23:59"
 
-        for item in included:
-            attributes = item.get("attributes", {})
-            tech_title = attributes.get("title", item.get("type", "Desconocido"))
-            values = attributes.get("values", [])
+            url = (
+                f"https://apidatos.ree.es/es/datos/generacion/estructura-generacion"
+                f"?start_date={start_date}&end_date={end_date}&time_trunc=day"
+            )
 
-            for entry in values:
-                records.append({
-                    "timestamp": entry.get("datetime"),
-                    "tech": tech_title,
-                    "value_mw": entry.get("value", 0.0)
-                })
+            try:
+                response = requests.get(url, headers=headers, timeout=12)
 
-        if not records:
-            print("[!] REData no devolvió registros para el rango solicitado.")
-            return None
+                if response.ok:
+                    json_data = response.json()
+                    included = json_data.get("included", [])
 
-        df_raw = pd.DataFrame(records)
-        df_raw["timestamp"] = pd.to_datetime(df_raw["timestamp"], utc=True)
+                    for item in included:
+                        attributes = item.get("attributes", {})
+                        tech_title = attributes.get(
+                            "title", item.get("type", "Desconocido")
+                        )
+                        values = attributes.get("values", [])
 
-        df_pivoted = df_raw.pivot_table(
-            index="timestamp", 
-            columns="tech", 
-            values="value_mw", 
-            aggfunc="sum"
-        ).fillna(0.0)
+                        for entry in values:
+                            all_records.append(
+                                {
+                                    "timestamp": entry.get("datetime"),
+                                    "tech": tech_title,
+                                    "value_mw": entry.get("value", 0.0),
+                                }
+                            )
+                else:
+                    print(
+                        f"⚠️ Error en bloque {start_date[:7]} [HTTP {response.status_code}]"
+                    )
 
-        nonsync_keywords = ["eólica", "solar", "fotovoltaica", "wind", "pv"]
-        nonsync_cols = [c for c in df_pivoted.columns if any(k in c.lower() for k in nonsync_keywords)]
-        sync_cols = [c for c in df_pivoted.columns if c not in nonsync_cols]
+            except Exception as e:
+                print(f"⚠️ Excepción consultando bloque {start_date[:7]}: {e}")
 
-        df_features = pd.DataFrame(index=df_pivoted.index)
-        df_features["gen_nonsync_mw"] = df_pivoted[nonsync_cols].sum(axis=1) if nonsync_cols else 0.0
-        df_features["gen_sync_mw"] = df_pivoted[sync_cols].sum(axis=1) if sync_cols else 10000.0
-        df_features["gen_total_mw"] = df_features["gen_nonsync_mw"] + df_features["gen_sync_mw"]
-        
-        df_features["demand_mw"] = df_features["gen_total_mw"] * 0.98
-        df_features["interconnection_balance_mw"] = 0.0
-        df_features["frequency_hz"] = 50.0
-        df_features["rocof_hz_s"] = 0.0
-        df_features["label_event"] = 0
-
-        print(f"[✓] Éxito: Se obtuvieron {len(df_features)} registros reales de REData.")
-        return df_features.reset_index()
-
-    except Exception as e:
-        print(f"[!] Excepción al conectar con la API de REData: {e}")
+    if not all_records:
+        print("[!] No se pudieron obtener registros de REData.")
         return None
 
+    # Procesar dataframe global
+    df_raw = pd.DataFrame(all_records)
+    df_raw["timestamp"] = pd.to_datetime(df_raw["timestamp"], utc=True)
+
+    # Pivotar por fecha y tecnología
+    df_pivoted = df_raw.pivot_table(
+        index="timestamp",
+        columns="tech",
+        values="value_mw",
+        aggfunc="sum",
+    ).fillna(0.0)
+
+    # Clasificación Síncrona vs No Síncrona
+    nonsync_keywords = ["eólica", "solar", "fotovoltaica", "wind", "pv"]
+    nonsync_cols = [
+        c
+        for c in df_pivoted.columns
+        if any(k in c.lower() for k in nonsync_keywords)
+    ]
+    sync_cols = [c for c in df_pivoted.columns if c not in nonsync_cols]
+
+    df_features = pd.DataFrame(index=df_pivoted.index)
+    df_features["gen_nonsync_mw"] = (
+        df_pivoted[nonsync_cols].sum(axis=1) if nonsync_cols else 0.0
+    )
+    df_features["gen_sync_mw"] = (
+        df_pivoted[sync_cols].sum(axis=1) if sync_cols else 10000.0
+    )
+    df_features["gen_total_mw"] = (
+        df_features["gen_nonsync_mw"] + df_features["gen_sync_mw"]
+    )
+
+    df_features["demand_mw"] = df_features["gen_total_mw"] * 0.98
+    df_features["interconnection_balance_mw"] = 0.0
+    df_features["frequency_hz"] = 50.0
+    df_features["rocof_hz_s"] = 0.0
+    df_features["label_event"] = 0
+
+    print(
+        f"[✓] Éxito: Se obtuvieron {len(df_features)} registros reales de REData."
+    )
+    return df_features.reset_index()
 
 def generate_fallback_data(hours: int = 168) -> pd.DataFrame:
     """

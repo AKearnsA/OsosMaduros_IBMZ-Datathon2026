@@ -1,0 +1,30 @@
+# Secrets - never commit
+*.pem
+*.key
+*.token
+.env
+.env.*
+secrets/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data and models (large files)
+data/raw/
+data/*.csv
+data/*.parquet
+*.joblib
+*.onnx
+*.gguf
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

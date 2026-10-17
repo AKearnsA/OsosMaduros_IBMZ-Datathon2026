@@ -1,6 +1,7 @@
 """
 Módulo de Ingesta de Datos y Conectores para GridZ Shield.
-Compatible con arquitectura IBM LinuxONE (s390x).
+Conecta con la API pública de Red Eléctrica (REData) y genera data/features.parquet.
+Optimizado para arquitectura IBM LinuxONE (s390x).
 """
 
 import os
@@ -13,87 +14,137 @@ import requests
 DATASET_PATH = "data/features.parquet"
 
 
-def fetch_redata_structure(start_date: str, end_date: str) -> Optional[pd.DataFrame]:
+def fetch_redata_structure(
+    start_year: int = 2024, end_year: int = 2024
+) -> Optional[pd.DataFrame]:
     """
-    Obtiene la estructura de generación de la API pública de REData (Red Eléctrica).
+    Obtiene la estructura de generación diaria de REData realizando peticiones
+    por bloques mensuales para evitar límites de la API.
     """
-    url = (
-        f"https://apidatos.ree.es/es/datos/generacion/estructura-generacion"
-        f"?start_date={start_date}T00:00:00&end_date={end_date}T23:59:59&time_trunc=hour&geo_limit=peninsular"
-    )
     headers = {
         "Accept": "application/json",
-        "User-Agent": "GridZShield/1.0",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
     }
 
-    try:
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
-        data = response.json()
+    all_records = []
 
-        included = data.get("included", [])
-        records = []
+    # Iterar mes a mes para el rango de años especificado
+    for year in range(start_year, end_year + 1):
+        for month in range(1, 13):
+            start_date = f"{year}-{month:02d}-01T00:00"
+            if month == 12:
+                end_date = f"{year}-12-31T23:59"
+            else:
+                next_month_first = datetime(year, month + 1, 1)
+                last_day = next_month_first - timedelta(days=1)
+                end_date = f"{last_day.strftime('%Y-%m-%d')}T23:59"
 
-        for tech in included:
-            type_name = tech.get("type", "")
-            values = tech.get("attributes", {}).get("values", [])
-            for v in values:
-                records.append(
-                    {
-                        "timestamp": v["datetime"],
-                        "tech": type_name,
-                        "value_mw": v["value"],
-                    }
-                )
+            url = (
+                f"https://apidatos.ree.es/es/datos/generacion/estructura-generacion"
+                f"?start_date={start_date}&end_date={end_date}&time_trunc=day"
+            )
 
-        if not records:
-            return None
+            try:
+                response = requests.get(url, headers=headers, timeout=12)
 
-        df_raw = pd.DataFrame(records)
-        df_raw["timestamp"] = pd.to_datetime(df_raw["timestamp"], utc=True)
+                if response.ok:
+                    json_data = response.json()
+                    included = json_data.get("included", [])
 
-        df_pivoted = df_raw.pivot_table(
-            index="timestamp", columns="tech", values="value_mw", aggfunc="sum"
-        ).fillna(0.0)
+                    for item in included:
+                        attributes = item.get("attributes", {})
+                        tech_title = attributes.get(
+                            "title", item.get("type", "Desconocido")
+                        )
+                        values = attributes.get("values", [])
 
-        nonsync_cols = [
-            c
-            for c in df_pivoted.columns
-            if any(k in c.lower() for k in ["eólica", "solar", "wind", "pv"])
-        ]
-        sync_cols = [c for c in df_pivoted.columns if c not in nonsync_cols]
+                        for entry in values:
+                            all_records.append(
+                                {
+                                    "timestamp": entry.get("datetime"),
+                                    "tech": tech_title,
+                                    "value_mw": entry.get("value", 0.0),
+                                }
+                            )
+                else:
+                    print(
+                        f"⚠️ Error en bloque {start_date[:7]} [HTTP {response.status_code}]"
+                    )
 
-        df_features = pd.DataFrame(index=df_pivoted.index)
-        df_features["gen_nonsync_mw"] = (
-            df_pivoted[nonsync_cols].sum(axis=1) if nonsync_cols else 0.0
-        )
-        df_features["gen_sync_mw"] = (
-            df_pivoted[sync_cols].sum(axis=1) if sync_cols else 10000.0
-        )
-        df_features["gen_total_mw"] = (
-            df_features["gen_nonsync_mw"] + df_features["gen_sync_mw"]
-        )
-        df_features["demand_mw"] = df_features["gen_total_mw"] * 0.98
-        df_features["interconnection_balance_mw"] = 0.0
-        df_features["frequency_hz"] = 50.0
-        df_features["rocof_hz_s"] = 0.0
-        df_features["label_event"] = 0
+            except Exception as e:
+                print(f"⚠️ Excepción consultando bloque {start_date[:7]}: {e}")
 
-        return df_features.reset_index()
-
-    except Exception as e:
-        print(f"[!] Excepción al conectar con la API de REData: {e}")
+    if not all_records:
+        print("[!] No se pudieron obtener registros de REData.")
         return None
+
+    df_raw = pd.DataFrame(all_records)
+    df_raw["timestamp"] = pd.to_datetime(df_raw["timestamp"], utc=True)
+
+    df_pivoted = df_raw.pivot_table(
+        index="timestamp",
+        columns="tech",
+        values="value_mw",
+        aggfunc="sum",
+    ).fillna(0.0)
+
+    nonsync_keywords = ["eólica", "solar", "fotovoltaica", "wind", "pv"]
+    nonsync_cols = [
+        c
+        for c in df_pivoted.columns
+        if any(k in c.lower() for k in nonsync_keywords)
+    ]
+    sync_cols = [c for c in df_pivoted.columns if c not in nonsync_cols]
+
+    df_features = pd.DataFrame(index=df_pivoted.index)
+
+    # Convertir MWh acumulados diarios a potencia media horaria en MW (dividiendo por 24h)
+    df_features["gen_nonsync_mw"] = (
+        df_pivoted[nonsync_cols].sum(axis=1) / 24.0 if nonsync_cols else 0.0
+    )
+    df_features["gen_sync_mw"] = (
+        df_pivoted[sync_cols].sum(axis=1) / 24.0 if sync_cols else 10000.0
+    )
+    df_features["gen_total_mw"] = (
+        df_features["gen_nonsync_mw"] + df_features["gen_sync_mw"]
+    )
+    df_features["demand_mw"] = df_features["gen_total_mw"] * 0.98
+
+    # Proporción de generación no sincrónica
+    df_features["nonsync_share"] = (
+        df_features["gen_nonsync_mw"] / df_features["gen_total_mw"]
+    ).clip(0.0, 1.0)
+
+    # Variables físicas complementarias con ruido realista
+    np.random.seed(42)
+    n = len(df_features)
+    df_features["interconnection_balance_mw"] = np.random.normal(-500, 300, n)
+    df_features["frequency_hz"] = np.random.normal(50.0, 0.03, n)
+    df_features["rocof_hz_s"] = np.random.normal(0.0, 0.005, n)
+
+    # Etiqueta de inestabilidad lógica para entrenamiento ML
+    df_features["label_event"] = (
+        (df_features["nonsync_share"] > 0.35)
+        | (np.abs(df_features["frequency_hz"] - 50.0) > 0.06)
+    ).astype(int)
+
+    print(
+        f"[✓] Éxito: Se obtuvieron y escalaron {len(df_features)} registros reales de REData."
+    )
+    return df_features.reset_index()
 
 
 def generate_fallback_data(hours: int = 168) -> pd.DataFrame:
     """
-    Genera datos sintéticos con distribuciones realistas respetando el contrato exacto.
+    Genera datos sintéticos con distribuciones realistas.
+    Formato de fecha compatible con s390x.
     """
+    print("🔄 Generando dataset sintético de respaldo (Fallback)...")
     np.random.seed(42)
 
-    # Rango temporal seguro para s390x en UTC
-    end_dt = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    end_dt = datetime.now(timezone.utc).replace(
+        minute=0, second=0, microsecond=0
+    )
     timestamps = [
         (end_dt - timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M:%SZ")
         for i in range(hours)
@@ -102,19 +153,12 @@ def generate_fallback_data(hours: int = 168) -> pd.DataFrame:
     n = len(timestamps)
 
     demand = np.random.normal(28000, 3000, n)
-    gen_nonsync = np.random.uniform(6000, 19000, n)
-    gen_sync = np.random.uniform(10000, 20000, n)
+    gen_nonsync = np.random.normal(12000, 2500, n)
+    gen_sync = np.random.normal(17000, 2000, n)
     gen_total = gen_nonsync + gen_sync
     nonsync_share = np.clip(gen_nonsync / gen_total, 0.0, 1.0)
-    interconnection = np.random.normal(-500, 300, n)
-    frequency = np.random.normal(50.0, 0.03, n)
-    rocof = np.random.normal(0.0, 0.005, n)
 
-    label_event = (
-        (nonsync_share > 0.52) | (np.abs(frequency - 50.0) > 0.07)
-    ).astype(int)
-
-    df = pd.DataFrame(
+    return pd.DataFrame(
         {
             "timestamp": timestamps,
             "demand_mw": np.round(demand, 2),
@@ -122,39 +166,30 @@ def generate_fallback_data(hours: int = 168) -> pd.DataFrame:
             "gen_nonsync_mw": np.round(gen_nonsync, 2),
             "gen_sync_mw": np.round(gen_sync, 2),
             "nonsync_share": np.round(nonsync_share, 4),
-            "interconnection_balance_mw": np.round(interconnection, 2),
-            "frequency_hz": np.round(frequency, 3),
-            "rocof_hz_s": np.round(rocof, 4),
-            "label_event": label_event,
+            "interconnection_balance_mw": np.round(
+                np.random.normal(-500, 300, n), 2
+            ),
+            "frequency_hz": np.round(np.random.normal(50.0, 0.02, n), 3),
+            "rocof_hz_s": np.round(np.random.normal(0.0, 0.005, n), 4),
+            "label_event": (nonsync_share > 0.40).astype(int),
         }
     )
-
-    return df
 
 
 def build_and_save_dataset():
     """
-    Ejecuta el pipeline de ingesta y guarda en data/features.parquet.
+    Ejecuta la ingesta desde REData. Si falla, activa el fallback sintético
+    y guarda el archivo Parquet de forma segura para s390x.
     """
     print("📡 Iniciando ingesta de datos para GridZ Shield...")
-
-    now_utc = datetime.now(timezone.utc)
-    start_str = (now_utc - timedelta(days=6)).strftime("%Y-%m-%d")
-    end_str = now_utc.strftime("%Y-%m-%d")
-
-    df = fetch_redata_structure(start_str, end_str)
+    df = fetch_redata_structure()
 
     if df is None or df.empty:
-        print("🔄 Generando dataset sintético de respaldo (Fallback)...")
         df = generate_fallback_data()
-    else:
-        # Formatear timestamp a ISO string antes de guardar
-        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True).dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    if "nonsync_share" not in df.columns:
-        df["nonsync_share"] = (df["gen_nonsync_mw"] / df["gen_total_mw"]).clip(
-            0.0, 1.0
-        )
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True).dt.strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
 
     required_columns = [
         "timestamp",

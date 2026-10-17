@@ -1,6 +1,6 @@
 """
-Módulo de Ingesta de Datos y Conectores para GridZ Shield.
-Conecta con la API pública de Red Eléctrica (REData) y genera data/features.parquet.
+M�dulo de Ingesta de Datos y Conectores para GridZ Shield.
+Conecta con la API p�blica de Red El�ctrica (REData) y genera data/features.parquet.
 Optimizado para arquitectura IBM LinuxONE (s390x).
 """
 
@@ -18,8 +18,8 @@ def fetch_redata_structure(
     start_year: int = 2024, end_year: int = 2024
 ) -> Optional[pd.DataFrame]:
     """
-    Obtiene la estructura de generación diaria de REData realizando peticiones
-    por bloques mensuales para evitar límites de la API.
+    Obtiene la estructura de generaci�n diaria de REData realizando peticiones
+    por bloques mensuales para evitar l�mites de la API.
     """
     headers = {
         "Accept": "application/json",
@@ -28,7 +28,6 @@ def fetch_redata_structure(
 
     all_records = []
 
-    # Iterar mes a mes para el rango de años especificado
     for year in range(start_year, end_year + 1):
         for month in range(1, 13):
             start_date = f"{year}-{month:02d}-01T00:00"
@@ -68,11 +67,11 @@ def fetch_redata_structure(
                             )
                 else:
                     print(
-                        f"⚠️ Error en bloque {start_date[:7]} [HTTP {response.status_code}]"
+                        f"?? Error en bloque {start_date[:7]} [HTTP {response.status_code}]"
                     )
 
             except Exception as e:
-                print(f"⚠️ Excepción consultando bloque {start_date[:7]}: {e}")
+                print(f"?? Excepci�n consultando bloque {start_date[:7]}: {e}")
 
     if not all_records:
         print("[!] No se pudieron obtener registros de REData.")
@@ -88,7 +87,7 @@ def fetch_redata_structure(
         aggfunc="sum",
     ).fillna(0.0)
 
-    nonsync_keywords = ["eólica", "solar", "fotovoltaica", "wind", "pv"]
+    nonsync_keywords = ["e�lica", "solar", "fotovoltaica", "wind", "pv"]
     nonsync_cols = [
         c
         for c in df_pivoted.columns
@@ -98,7 +97,6 @@ def fetch_redata_structure(
 
     df_features = pd.DataFrame(index=df_pivoted.index)
 
-    # Convertir MWh acumulados diarios a potencia media horaria en MW (dividiendo por 24h)
     df_features["gen_nonsync_mw"] = (
         df_pivoted[nonsync_cols].sum(axis=1) / 24.0 if nonsync_cols else 0.0
     )
@@ -110,36 +108,33 @@ def fetch_redata_structure(
     )
     df_features["demand_mw"] = df_features["gen_total_mw"] * 0.98
 
-    # Proporción de generación no sincrónica
     df_features["nonsync_share"] = (
         df_features["gen_nonsync_mw"] / df_features["gen_total_mw"]
     ).clip(0.0, 1.0)
 
-    # Variables físicas complementarias con ruido realista
     np.random.seed(42)
     n = len(df_features)
     df_features["interconnection_balance_mw"] = np.random.normal(-500, 300, n)
     df_features["frequency_hz"] = np.random.normal(50.0, 0.03, n)
     df_features["rocof_hz_s"] = np.random.normal(0.0, 0.005, n)
 
-    # Etiqueta de inestabilidad lógica para entrenamiento ML
     df_features["label_event"] = (
         (df_features["nonsync_share"] > 0.35)
         | (np.abs(df_features["frequency_hz"] - 50.0) > 0.06)
     ).astype(int)
 
     print(
-        f"[✓] Éxito: Se obtuvieron y escalaron {len(df_features)} registros reales de REData."
+        f"[?] �xito: Se obtuvieron y escalaron {len(df_features)} registros reales de REData."
     )
     return df_features.reset_index()
 
 
 def generate_fallback_data(hours: int = 168) -> pd.DataFrame:
     """
-    Genera datos sintéticos con distribuciones realistas.
+    Genera datos sint�ticos con distribuciones realistas.
     Formato de fecha compatible con s390x.
     """
-    print("🔄 Generando dataset sintético de respaldo (Fallback)...")
+    print("?? Generando dataset sint�tico de respaldo (Fallback)...")
     np.random.seed(42)
 
     end_dt = datetime.now(timezone.utc).replace(
@@ -178,10 +173,10 @@ def generate_fallback_data(hours: int = 168) -> pd.DataFrame:
 
 def build_and_save_dataset():
     """
-    Ejecuta la ingesta desde REData. Si falla, activa el fallback sintético
+    Ejecuta la ingesta desde REData. Si falla, activa el fallback sint�tico
     y guarda el archivo Parquet de forma segura para s390x.
     """
-    print("📡 Iniciando ingesta de datos para GridZ Shield...")
+    print("?? Iniciando ingesta de datos para GridZ Shield...")
     df = fetch_redata_structure()
 
     if df is None or df.empty:
@@ -211,10 +206,9 @@ def build_and_save_dataset():
     df_final.to_parquet(DATASET_PATH, index=False)
 
     print(
-        f"✅ Archivo Parquet generado con éxito en '{DATASET_PATH}' ({len(df_final)} filas)."
+        f"? Archivo Parquet generado con �xito en '{DATASET_PATH}' ({len(df_final)} filas)."
     )
 
 
 if __name__ == "__main__":
     build_and_save_dataset()
-    

@@ -14,7 +14,7 @@ packages = {
     "numpy": "Cálculos numéricos",
     "fastapi": "API de inferencia",
     "uvicorn": "Servidor ASGI",
-    "sklearn": "Modelos ML (scikit-learn)",
+    "sklearn": "Modelos ML",
     "joblib": "Persistencia del modelo",
     "pydantic": "Validación de esquemas JSON",
     "dotenv": "Gestión de variables de entorno (python-dotenv)",
@@ -36,3 +36,4 @@ for pkg, desc in packages.items():
 print("=" * 50)
 if not missing:
     print("¡Entorno 100% verificado y listo para GridZ Shield!")
+

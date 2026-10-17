@@ -16,14 +16,10 @@ class GridPredictor:
         if not isinstance(loaded, dict):
             raise ValueError(f"Se esperaba un diccionario en {model_path}, pero se obtuvo {type(loaded)}")
 
-        # Extracción alineada con las claves reales de tu artefacto
         self.model = loaded.get("regressor_model")
         self.p75 = loaded.get("percentile_75", 0.3401)
         self.p95 = loaded.get("percentile_95", 0.4019)
-        self.feature_names = loaded.get("feature_names", [
-            "nonsync_share", "interconnection_balance_mw", "demand_mw",
-            "inertia_est_gws", "rocof_lag_1d", "rocof_ma_7d", "month", "dayofweek"
-        ])
+        self.feature_names = loaded.get("feature_names", [])
 
         if self.model is None:
             raise ValueError(f"No se encontró 'regressor_model' dentro de {model_path}")
@@ -34,29 +30,40 @@ class GridPredictor:
         inertia_est_gws = (data["gen_sync_mw"] * 4.5) / 1000.0
         dt = pd.to_datetime(data["timestamp"])
 
-        features_dict = {
-            "demand_mw": [data["demand_mw"]],
-            "gen_total_mw": [data["gen_total_mw"]],
-            "gen_nonsync_mw": [data["gen_nonsync_mw"]],
-            "gen_sync_mw": [data["gen_sync_mw"]],
-            "nonsync_share": [nonsync_share],
-            "interconnection_balance_mw": [data["interconnection_balance_mw"]],
-            "inertia_est_gws": [inertia_est_gws],
-            "rocof_lag_1d": [data.get("rocof_lag_1d", 0.0)],
-            "rocof_ma_7d": [data.get("rocof_ma_7d", 0.0)],
-            "month": [dt.month],
-            "dayofweek": [dt.dayofweek]
+        # Mapeo de todas las variables posibles vistas durante el fit
+        raw_features = {
+            "demand_mw": data["demand_mw"],
+            "gen_total_mw": data["gen_total_mw"],
+            "gen_nonsync_mw": data["gen_nonsync_mw"],
+            "gen_sync_mw": data["gen_sync_mw"],
+            "nonsync_share": nonsync_share,
+            "interconnection_balance_mw": data["interconnection_balance_mw"],
+            "inertia_est_gws": inertia_est_gws,
+            "rocof_est_hz_s": data.get("frequency_hz", 0.0) or 0.0,
+            "rocof_lag1": data.get("rocof_lag_1d", 0.0),
+            "rocof_lag_1d": data.get("rocof_lag_1d", 0.0),
+            "nonsync_share_lag1": nonsync_share,
+            "nonsync_roll7_mean": nonsync_share,
+            "rocof_ma_7d": data.get("rocof_ma_7d", 0.0),
+            "month": dt.month,
+            "day_of_week": dt.dayofweek,
+            "dayofweek": dt.dayofweek
         }
 
-        df_input = pd.DataFrame(features_dict)
+        # Construir DataFrame con exactamente las columnas esperadas por el modelo en orden
+        df_input = pd.DataFrame([raw_features])
         
-        # Filtrar solo las columnas que el RandomForest espera
-        cols_to_use = [col for col in self.feature_names if col in df_input.columns]
-        X = df_input[cols_to_use] if cols_to_use else df_input
+        if self.feature_names:
+            for col in self.feature_names:
+                if col not in df_input.columns:
+                    df_input[col] = 0.0
+            X = df_input[self.feature_names]
+        else:
+            X = df_input
 
         pred_rocof = float(self.model.predict(X)[0])
 
-        # Mapeo por percentiles de riesgo
+        # Clasificación según percentiles
         if pred_rocof < self.p75:
             level = "Stable"
             risk_score = round(min(0.50, max(0.0, (pred_rocof / self.p75) * 0.50)), 2)

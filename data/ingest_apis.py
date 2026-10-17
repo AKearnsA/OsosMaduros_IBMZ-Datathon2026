@@ -28,7 +28,6 @@ def fetch_redata_structure(
 
     all_records = []
 
-    # Iterar mes a mes para el rango de años especificado
     for year in range(start_year, end_year + 1):
         for month in range(1, 13):
             start_date = f"{year}-{month:02d}-01T00:00"
@@ -78,11 +77,9 @@ def fetch_redata_structure(
         print("[!] No se pudieron obtener registros de REData.")
         return None
 
-    # Procesar dataframe global
     df_raw = pd.DataFrame(all_records)
     df_raw["timestamp"] = pd.to_datetime(df_raw["timestamp"], utc=True)
 
-    # Pivotar por fecha y tecnología
     df_pivoted = df_raw.pivot_table(
         index="timestamp",
         columns="tech",
@@ -90,7 +87,6 @@ def fetch_redata_structure(
         aggfunc="sum",
     ).fillna(0.0)
 
-    # Clasificación Síncrona vs No Síncrona
     nonsync_keywords = ["eólica", "solar", "fotovoltaica", "wind", "pv"]
     nonsync_cols = [
         c
@@ -100,24 +96,39 @@ def fetch_redata_structure(
     sync_cols = [c for c in df_pivoted.columns if c not in nonsync_cols]
 
     df_features = pd.DataFrame(index=df_pivoted.index)
+
+    # Convertir MWh acumulados diarios a potencia media horaria en MW (dividiendo por 24h)
     df_features["gen_nonsync_mw"] = (
-        df_pivoted[nonsync_cols].sum(axis=1) if nonsync_cols else 0.0
+        df_pivoted[nonsync_cols].sum(axis=1) / 24.0 if nonsync_cols else 0.0
     )
     df_features["gen_sync_mw"] = (
-        df_pivoted[sync_cols].sum(axis=1) if sync_cols else 10000.0
+        df_pivoted[sync_cols].sum(axis=1) / 24.0 if sync_cols else 10000.0
     )
     df_features["gen_total_mw"] = (
         df_features["gen_nonsync_mw"] + df_features["gen_sync_mw"]
     )
-
     df_features["demand_mw"] = df_features["gen_total_mw"] * 0.98
-    df_features["interconnection_balance_mw"] = 0.0
-    df_features["frequency_hz"] = 50.0
-    df_features["rocof_hz_s"] = 0.0
-    df_features["label_event"] = 0
+
+    # Proporción de generación no sincrónica
+    df_features["nonsync_share"] = (
+        df_features["gen_nonsync_mw"] / df_features["gen_total_mw"]
+    ).clip(0.0, 1.0)
+
+    # Simular/asignar variables físicas complementarias con ruido realista
+    np.random.seed(42)
+    n = len(df_features)
+    df_features["interconnection_balance_mw"] = np.random.normal(-500, 300, n)
+    df_features["frequency_hz"] = np.random.normal(50.0, 0.03, n)
+    df_features["rocof_hz_s"] = np.random.normal(0.0, 0.005, n)
+
+    # Etiqueta de inestabilidad razonable (1 cuando el share no sincrónico es muy elevado o frecuencia se desvía)
+    df_features["label_event"] = (
+        (df_features["nonsync_share"] > 0.35)
+        | (np.abs(df_features["frequency_hz"] - 50.0) > 0.06)
+    ).astype(int)
 
     print(
-        f"[✓] Éxito: Se obtuvieron {len(df_features)} registros reales de REData."
+        f"[✓] Éxito: Se obtuvieron y escalaron {len(df_features)} registros reales de REData."
     )
     return df_features.reset_index()
 
@@ -144,7 +155,7 @@ def generate_fallback_data(hours: int = 168) -> pd.DataFrame:
     gen_nonsync = np.random.normal(12000, 2500, n)
     gen_sync = np.random.normal(17000, 2000, n)
     gen_total = gen_nonsync + gen_sync
-    interconnection = np.random.normal(-500, 300, n)
+    nonsync_share = np.clip(gen_nonsync / gen_total, 0.0, 1.0)
 
     return pd.DataFrame(
         {
@@ -153,10 +164,13 @@ def generate_fallback_data(hours: int = 168) -> pd.DataFrame:
             "gen_total_mw": np.round(gen_total, 2),
             "gen_nonsync_mw": np.round(gen_nonsync, 2),
             "gen_sync_mw": np.round(gen_sync, 2),
-            "interconnection_balance_mw": np.round(interconnection, 2),
+            "nonsync_share": np.round(nonsync_share, 4),
+            "interconnection_balance_mw": np.round(
+                np.random.normal(-500, 300, n), 2
+            ),
             "frequency_hz": np.round(np.random.normal(50.0, 0.02, n), 3),
             "rocof_hz_s": np.round(np.random.normal(0.0, 0.005, n), 4),
-            "label_event": np.random.choice([0, 1], size=n, p=[0.95, 0.05]),
+            "label_event": (nonsync_share > 0.40).astype(int),
         }
     )
 
@@ -172,14 +186,8 @@ def build_and_save_dataset():
     if df is None or df.empty:
         df = generate_fallback_data()
 
-    # Formateo seguro a string ISO para evitar problemas de microsegundos en s390x
     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True).dt.strftime(
         "%Y-%m-%dT%H:%M:%SZ"
-    )
-
-    # Cálculo obligatorio del contrato
-    df["nonsync_share"] = (df["gen_nonsync_mw"] / df["gen_total_mw"]).clip(
-        0.0, 1.0
     )
 
     required_columns = [

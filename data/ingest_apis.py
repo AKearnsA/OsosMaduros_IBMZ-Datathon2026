@@ -1,17 +1,18 @@
-
 """
 Módulo de Ingesta de Datos y Conectores para GridZ Shield.
 Conecta con la API pública de Red Eléctrica (REData) y genera data/features.parquet.
+Optimizado para arquitectura IBM LinuxONE (s390x).
 """
 
 import os
-import requests
-import pandas as pd
-import numpy as np
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+import numpy as np
+import pandas as pd
+import requests
 
 DATASET_PATH = "data/features.parquet"
+
 
 def fetch_redata_structure(
     start_year: int = 2024, end_year: int = 2024
@@ -30,7 +31,6 @@ def fetch_redata_structure(
     # Iterar mes a mes para el rango de años especificado
     for year in range(start_year, end_year + 1):
         for month in range(1, 13):
-            # Calcular primer y último día del mes
             start_date = f"{year}-{month:02d}-01T00:00"
             if month == 12:
                 end_date = f"{year}-12-31T23:59"
@@ -121,16 +121,23 @@ def fetch_redata_structure(
     )
     return df_features.reset_index()
 
+
 def generate_fallback_data(hours: int = 168) -> pd.DataFrame:
     """
-    Genera datos sintéticos con distribuciones realistas respetando el contrato exacto.
+    Genera datos sintéticos con distribuciones realistas.
+    Formato de fecha compatible con s390x.
     """
     print("🔄 Generando dataset sintético de respaldo (Fallback)...")
-    end_time = datetime.now(timezone.utc)
-    timestamps = [end_time - timedelta(hours=i) for i in range(hours)]
-    timestamps.reverse()
-
     np.random.seed(42)
+
+    end_dt = datetime.now(timezone.utc).replace(
+        minute=0, second=0, microsecond=0
+    )
+    timestamps = [
+        (end_dt - timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        for i in range(hours)
+    ]
+    timestamps.reverse()
     n = len(timestamps)
 
     demand = np.random.normal(28000, 3000, n)
@@ -139,9 +146,9 @@ def generate_fallback_data(hours: int = 168) -> pd.DataFrame:
     gen_total = gen_nonsync + gen_sync
     interconnection = np.random.normal(-500, 300, n)
 
-    df = pd.DataFrame(
+    return pd.DataFrame(
         {
-            "timestamp": pd.to_datetime(timestamps, utc=True),
+            "timestamp": timestamps,
             "demand_mw": np.round(demand, 2),
             "gen_total_mw": np.round(gen_total, 2),
             "gen_nonsync_mw": np.round(gen_nonsync, 2),
@@ -153,24 +160,28 @@ def generate_fallback_data(hours: int = 168) -> pd.DataFrame:
         }
     )
 
-    return df
 
 def build_and_save_dataset():
     """
     Ejecuta la ingesta desde REData. Si falla, activa el fallback sintético
-    y guarda el archivo Parquet respetando el contrato de datos.
+    y guarda el archivo Parquet de forma segura para s390x.
     """
     print("📡 Iniciando ingesta de datos para GridZ Shield...")
     df = fetch_redata_structure()
 
-    # Si REData falla o devuelve vacío, se activa el fallback automáticamente
     if df is None or df.empty:
         df = generate_fallback_data()
 
-    # Cálculo obligatorio del contrato
-    df["nonsync_share"] = (df["gen_nonsync_mw"] / df["gen_total_mw"]).clip(0.0, 1.0)
+    # Formateo seguro a string ISO para evitar problemas de microsegundos en s390x
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True).dt.strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
 
-    # Orden exacto de columnas del contrato de datos de GridZ Shield
+    # Cálculo obligatorio del contrato
+    df["nonsync_share"] = (df["gen_nonsync_mw"] / df["gen_total_mw"]).clip(
+        0.0, 1.0
+    )
+
     required_columns = [
         "timestamp",
         "demand_mw",
@@ -185,14 +196,16 @@ def build_and_save_dataset():
     ]
 
     df_final = df[required_columns].copy()
-    df_final["timestamp"] = pd.to_datetime(df_final["timestamp"], utc=True)
     df_final = df_final.sort_values("timestamp").reset_index(drop=True)
 
     os.makedirs(os.path.dirname(DATASET_PATH), exist_ok=True)
     df_final.to_parquet(DATASET_PATH, index=False)
 
-    print(f"✅ Archivo Parquet generado con éxito en '{DATASET_PATH}' ({len(df_final)} filas).")
+    print(
+        f"✅ Archivo Parquet generado con éxito en '{DATASET_PATH}' ({len(df_final)} filas)."
+    )
+
 
 if __name__ == "__main__":
     build_and_save_dataset()
-
+    

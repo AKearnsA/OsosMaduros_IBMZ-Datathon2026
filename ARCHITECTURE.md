@@ -115,11 +115,4 @@ Output:
 | `GRANITE_MODEL_PATH` | `~/shared/models/granite-3.3-2b-instruct-be.Q4_K_M.gguf` | Granite GGUF (big-endian on s390x) |
 | `LLM_THREADS` | All CPUs if ≤ 4, otherwise half | llama.cpp threads |
 
-## Contributors by module (from git history)
-| Module | Main contributors |
-|---|---|
-| data | Adrián, darmas06, JMC-M |
-| model | Adrián (also as AKearnsA), JMC-M |
-| service | Adrián, darmas06, JMC-M |
-| explain | JMC-M, darmas06, Adrián |
-| app | darmas06, Adrián, JMC-M |
+

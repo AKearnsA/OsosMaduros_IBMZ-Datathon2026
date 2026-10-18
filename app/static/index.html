@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -67,88 +67,88 @@
 </head>
 <body>
 <header>
-  <h1>GridZ Shield <span>Índice de riesgo de la red peninsular · OsosMaduros · IBM Z Datathon 2026</span></h1>
+  <h1>GridZ Shield <span>Peninsular grid risk index · OsosMaduros · IBM Z Datathon 2026</span></h1>
   <div class="pills">
-    <div class="pill" id="pill-arch">Arquitectura: <b>…</b></div>
-    <div class="pill" id="pill-model">Modelo predictivo: <b>…</b></div>
-    <div class="pill" id="pill-llm">Granite: <b>…</b></div>
+    <div class="pill" id="pill-arch">Architecture: <b>…</b></div>
+    <div class="pill" id="pill-model">Predictive model: <b>…</b></div>
+    <div class="pill" id="pill-llm">Explainer: <b>…</b></div>
   </div>
 </header>
 
 <main>
   <div class="controls">
-    <button class="primary" id="btn-play">▶ Reproducir</button>
-    <button id="btn-pause" disabled>⏸ Pausa</button>
-    <button id="btn-step">Siguiente día</button>
-    <button id="btn-reset">↺ Reiniciar</button>
-    <label>Velocidad
+    <button class="primary" id="btn-play">▶ Play</button>
+    <button id="btn-pause" disabled>⏸ Pause</button>
+    <button id="btn-step">Next day</button>
+    <button id="btn-reset">↺ Reset</button>
+    <label>Speed
       <select id="speed">
-        <option value="1000">1 s / día</option>
-        <option value="2500" selected>2,5 s / día</option>
-        <option value="5000">5 s / día</option>
+        <option value="1000">1 s / day</option>
+        <option value="2500" selected>2.5 s / day</option>
+        <option value="5000">5 s / day</option>
       </select>
     </label>
-    <div class="now">Previsión para: <b id="now-date">—</b></div>
+    <div class="now">Forecast for: <b id="now-date">—</b></div>
   </div>
 
   <div class="grid-top">
     <div class="card">
-      <h2>Riesgo previsto para el día siguiente</h2>
+      <h2>Predicted risk for the next day</h2>
       <div class="chart-wrap"><canvas id="chart"></canvas></div>
-      <div class="placeholder" id="chart-error" hidden>No se pudo cargar la librería de gráficos (Chart.js). El resto del panel funciona.</div>
+      <div class="placeholder" id="chart-error" hidden>Could not load the charting library (Chart.js). The rest of the dashboard works.</div>
     </div>
     <div class="card level">
-      <h2>Nivel previsto</h2>
+      <h2>Predicted level</h2>
       <div class="badge" id="level">—</div>
       <div class="score">Grid Risk Index <b id="score">—</b> / 1</div>
-      <div class="date" id="level-date">Pulsa «Reproducir»</div>
+      <div class="date" id="level-date">Press “Play”</div>
       <div class="factors" id="factors"></div>
     </div>
   </div>
 
   <div class="metrics">
-    <div class="card metric"><div class="label">Inercia estimada</div><div class="value" id="m-inertia">—</div><div class="hint" id="h-inertia"></div></div>
-    <div class="card metric"><div class="label">Eólica + solar</div><div class="value" id="m-nonsync">—</div><div class="hint" id="h-nonsync"></div></div>
-    <div class="card metric"><div class="label">RoCoF estimado (pérdida 1 GW)</div><div class="value" id="m-rocof">—</div><div class="hint" id="h-rocof"></div></div>
-    <div class="card metric"><div class="label">Intercambio internacional</div><div class="value" id="m-inter">—</div><div class="hint" id="h-inter"></div></div>
-    <div class="card metric"><div class="label">Demanda media</div><div class="value" id="m-demand">—</div><div class="hint" id="h-demand"></div></div>
+    <div class="card metric"><div class="label">Estimated inertia</div><div class="value" id="m-inertia">—</div><div class="hint" id="h-inertia"></div></div>
+    <div class="card metric"><div class="label">Wind + solar</div><div class="value" id="m-nonsync">—</div><div class="hint" id="h-nonsync"></div></div>
+    <div class="card metric"><div class="label">Estimated RoCoF (1 GW loss)</div><div class="value" id="m-rocof">—</div><div class="hint" id="h-rocof"></div></div>
+    <div class="card metric"><div class="label">Cross-border exchange</div><div class="value" id="m-inter">—</div><div class="hint" id="h-inter"></div></div>
+    <div class="card metric"><div class="label">Average demand</div><div class="value" id="m-demand">—</div><div class="hint" id="h-demand"></div></div>
   </div>
 
   <div class="card">
     <div class="explain-head">
-      <h2>Explicación para el operador</h2>
+      <h2>Explanation for the operator</h2>
       <div style="display:flex; gap:8px; align-items:center;">
         <span class="source" id="source">—</span>
-        <button id="btn-explain" disabled>Generar ahora con Granite</button>
+        <button id="btn-explain" disabled>Generate now with Granite</button>
       </div>
     </div>
-    <div id="explain-body" class="placeholder">La explicación aparecerá al reproducir el replay.</div>
+    <div id="explain-body" class="placeholder">The explanation will appear when the replay runs.</div>
   </div>
 </main>
 
 <footer>
-  Replay retrospectivo con datos diarios reales de REData (sistema peninsular, 2025). Cada previsión se calcula con los datos del día anterior.
-  El 28-04-2025 no se usa como entrada del modelo porque sus datos están distorsionados por el propio apagón.
-  La inercia y el RoCoF son estimaciones físicas a partir del mix de generación, no medidas.
-  GridZ Shield es una herramienta de apoyo a la decisión: no controla la red.
+  Retrospective replay with real daily REData data (peninsular system, 2025). Each forecast is computed from the previous day's data.
+  28-04-2025 is not used as model input because its data is distorted by the blackout itself.
+  Inertia and RoCoF are physical estimates derived from the generation mix, not measurements.
+  GridZ Shield is a decision-support tool: it does not control the grid.
 </footer>
 
 <script>
 const COLORS = { Stable: "#2fb37a", Watch: "#f0a020", Critical: "#e5484d" };
-const LEVEL_ES = { Stable: "Estable", Watch: "Vigilancia", Critical: "Crítico" };
-const FACTOR_ES = {
-  inertia_est_gws: "Inercia baja",
-  nonsync_share: "Mucha eólica y solar",
-  interconnection_balance_mw: "Intercambio elevado",
+const LEVEL_EN = { Stable: "Stable", Watch: "Watch", Critical: "Critical" };
+const FACTOR_EN = {
+  inertia_est_gws: "Low inertia",
+  nonsync_share: "High wind and solar",
+  interconnection_balance_mw: "High cross-border exchange",
 };
-// Percentiles 2021-2024 (los mismos que usan service/ y explain/)
+// 2021-2024 percentiles (same ones used by service/ and explain/)
 const REF = { inertiaLow: 73.5, inertiaHigh: 94.1, nonsyncLow: 0.304, nonsyncHigh: 0.464,
               rocofLow: 0.266, rocofHigh: 0.340, interHigh: 2630 };
 
 const state = { days: [], events: [], explanations: {}, results: {}, idx: -1,
                 playing: false, chart: null };
 const $ = (id) => document.getElementById(id);
-const fmt = (v, d = 0) => v.toLocaleString("es-ES", { minimumFractionDigits: d, maximumFractionDigits: d });
+const fmt = (v, d = 0) => v.toLocaleString("en-GB", { minimumFractionDigits: d, maximumFractionDigits: d });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const shortDate = (iso) => { const [y, m, d] = iso.split("-"); return `${d}-${m}`; };
 
@@ -164,26 +164,29 @@ function band(value, low, high, lowText, highText) {
   return ["Normal", ""];
 }
 
-// ---------- Cabecera ----------
+// ---------- Header ----------
 async function loadHealth() {
   try {
     const h = await getJSON("/health");
-    $("pill-arch").innerHTML = `Arquitectura: <b>${h.arch}</b>`;
+    $("pill-arch").innerHTML = `Architecture: <b>${h.arch}</b>`;
     $("pill-arch").className = "pill " + (h.arch === "s390x" ? "ok" : "warn");
-    $("pill-model").innerHTML = `Modelo predictivo: <b>${h.model_loaded ? "cargado" : "no cargado"}</b>`;
+    $("pill-model").innerHTML = `Predictive model: <b>${h.model_loaded ? "loaded" : "not loaded"}</b>`;
     $("pill-model").className = "pill " + (h.model_loaded ? "ok" : "warn");
     const pre = Object.keys(state.explanations).length;
-    const llm = h.llm_available ? "en vivo" : (pre ? `${pre} pregeneradas` : "no disponible");
-    $("pill-llm").innerHTML = `Granite: <b>${llm}</b>`;
-    $("pill-llm").className = "pill " + (h.llm_available || pre ? "ok" : "warn");
+    if (h.llm_available) {
+      $("pill-llm").innerHTML = `Granite: <b>live</b>`;
+    } else {
+      $("pill-llm").innerHTML = `Explainer: <b>rules mode (fallback)</b>`;
+    }
+    $("pill-llm").className = "pill " + (h.llm_available || h.explainer_loaded || pre ? "ok" : "warn");
     state.llmLive = h.llm_available;
   } catch (e) {
-    $("pill-arch").innerHTML = `API: <b>sin conexión</b>`;
+    $("pill-arch").innerHTML = `API: <b>offline</b>`;
     $("pill-arch").className = "pill warn";
   }
 }
 
-// ---------- Gráfico ----------
+// ---------- Chart ----------
 const bandsPlugin = {
   id: "riskBands",
   beforeDatasetsDraw(chart) {
@@ -210,7 +213,7 @@ const eventPlugin = {
       ctx.strokeStyle = "#e6edf3"; ctx.setLineDash([5, 4]); ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.moveTo(px, a.top); ctx.lineTo(px, a.bottom); ctx.stroke();
       ctx.setLineDash([]); ctx.fillStyle = "#e6edf3"; ctx.font = "12px system-ui";
-      ctx.textAlign = "right"; ctx.fillText(ev.label.replace("Apagon iberico", "Apagón ibérico"), px - 6, a.top + 14);
+      ctx.textAlign = "right"; ctx.fillText(ev.label.replace(/Apag[oó]n ib[eé]rico/i, "Iberian blackout"), px - 6, a.top + 14);
       ctx.restore();
     });
   },
@@ -227,7 +230,7 @@ function buildChart() {
         { type: "line", label: "Grid Risk Index", data: [...empty], yAxisID: "y",
           borderColor: "#e6edf3", borderWidth: 2, tension: 0.25, spanGaps: true,
           pointRadius: 6, pointBackgroundColor: [...empty], pointBorderColor: "#0d1117" },
-        { type: "bar", label: "Inercia estimada (GW·s)", data: [...empty], yAxisID: "y1",
+        { type: "bar", label: "Estimated inertia (GW·s)", data: [...empty], yAxisID: "y1",
           backgroundColor: "rgba(78,161,255,0.25)", borderColor: "rgba(78,161,255,0.6)", borderWidth: 1 },
       ],
     },
@@ -238,7 +241,7 @@ function buildChart() {
         x: { ticks: { color: "#8b98a8" }, grid: { color: "#1f2731" } },
         y: { min: 0, max: 1, title: { display: true, text: "Grid Risk Index", color: "#8b98a8" },
              ticks: { color: "#8b98a8" }, grid: { color: "#1f2731" } },
-        y1: { position: "right", min: 0, title: { display: true, text: "Inercia (GW·s)", color: "#8b98a8" },
+        y1: { position: "right", min: 0, title: { display: true, text: "Inertia (GW·s)", color: "#8b98a8" },
               ticks: { color: "#8b98a8" }, grid: { display: false } },
       },
       plugins: {
@@ -246,7 +249,7 @@ function buildChart() {
         tooltip: { callbacks: { afterLabel: (c) => {
           if (c.datasetIndex !== 0) return "";
           const r = state.results[state.days[c.dataIndex].forecast_date];
-          return r ? `Nivel: ${LEVEL_ES[r.level]}` : "";
+          return r ? `Level: ${LEVEL_EN[r.level]}` : "";
         } } },
       },
     },
@@ -254,7 +257,7 @@ function buildChart() {
   });
 }
 
-// ---------- Paneles ----------
+// ---------- Panels ----------
 function setMetric(id, value, hint) {
   $("m-" + id).innerHTML = value;
   $("h-" + id).textContent = hint[0];
@@ -263,31 +266,31 @@ function setMetric(id, value, hint) {
 
 function renderDay(day, res) {
   const f = day.features;
-  $("now-date").textContent = new Date(day.forecast_date + "T12:00:00").toLocaleDateString("es-ES",
+  $("now-date").textContent = new Date(day.forecast_date + "T12:00:00").toLocaleDateString("en-GB",
     { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   const lvl = $("level");
-  lvl.textContent = LEVEL_ES[res.level] || res.level;
+  lvl.textContent = LEVEL_EN[res.level] || res.level;
   lvl.style.color = COLORS[res.level];
   $("score").textContent = fmt(res.risk_score, 2);
-  $("level-date").textContent = `Previsión para el ${shortDate(day.forecast_date)} con datos del ${shortDate(day.date)}`;
+  $("level-date").textContent = `Forecast for ${shortDate(day.forecast_date)} using data from ${shortDate(day.date)}`;
   $("factors").innerHTML = "";
   (res.top_factors.length ? res.top_factors : [null]).forEach((k) => {
     const el = document.createElement("span");
     el.className = "factor";
-    el.textContent = k ? (FACTOR_ES[k] || k) : "Ningún factor fuera de lo normal";
+    el.textContent = k ? (FACTOR_EN[k] || k) : "No factor outside the norm";
     $("factors").appendChild(el);
   });
 
   setMetric("inertia", `${fmt(f.inertia_est_gws, 1)}<span class="unit">GW·s</span>`,
-    band(f.inertia_est_gws, REF.inertiaLow, REF.inertiaHigh, ["Baja", "critical"], ["Alta", "stable"]));
+    band(f.inertia_est_gws, REF.inertiaLow, REF.inertiaHigh, ["Low", "critical"], ["High", "stable"]));
   setMetric("nonsync", `${fmt(f.nonsync_share * 100)}<span class="unit">%</span>`,
-    band(f.nonsync_share, REF.nonsyncLow, REF.nonsyncHigh, ["Baja", ""], ["Alta", "watch"]));
+    band(f.nonsync_share, REF.nonsyncLow, REF.nonsyncHigh, ["Low", ""], ["High", "watch"]));
   setMetric("rocof", `${fmt(f.rocof_est_hz_s, 3)}<span class="unit">Hz/s</span>`,
-    band(f.rocof_est_hz_s, REF.rocofLow, REF.rocofHigh, ["Bajo", "stable"], ["Alto", "critical"]));
+    band(f.rocof_est_hz_s, REF.rocofLow, REF.rocofHigh, ["Low", "stable"], ["High", "critical"]));
   const exporting = f.interconnection_balance_mw < 0;
+  const interHigh = Math.abs(f.interconnection_balance_mw) > REF.interHigh;
   setMetric("inter", `${fmt(Math.abs(f.interconnection_balance_mw))}<span class="unit">MW</span>`,
-    [`${exporting ? "Exportación" : "Importación"}${Math.abs(f.interconnection_balance_mw) > REF.interHigh ? " elevada" : ""}`,
-     Math.abs(f.interconnection_balance_mw) > REF.interHigh ? "watch" : ""]);
+    [`${exporting ? "Exporting" : "Importing"}${interHigh ? " (high)" : ""}`, interHigh ? "watch" : ""]);
   setMetric("demand", `${fmt(f.demand_mw)}<span class="unit">MW</span>`, ["", ""]);
 
   renderExplanation(day, res, state.explanations[day.forecast_date]);
@@ -306,22 +309,22 @@ function renderExplanation(day, res, ex, live = false) {
   const body = $("explain-body");
   const src = $("source");
   if (!ex) {
-    src.textContent = "sin explicación";
+    src.textContent = "no explanation";
     src.className = "source";
     body.className = "placeholder";
     body.textContent = state.llmLive
-      ? "No hay explicación pregenerada para este día. Pulsa «Generar ahora con Granite» (en LinuxONE tarda varios minutos)."
-      : "No hay explicación pregenerada para este día (ejecuta app/pregenerate.py en LinuxONE).";
+      ? "No pregenerated explanation for this day. Press “Generate now with Granite” (on LinuxONE it takes several minutes)."
+      : "No pregenerated explanation for this day (run app/pregenerate.py on LinuxONE).";
     return;
   }
   if (ex.source === "granite") {
-    const when = ex.generated_at ? ` el ${ex.generated_at.slice(0, 16).replace("T", " ")} UTC` : "";
-    const where = ex.arch ? ` en ${ex.arch}` : "";
+    const when = ex.generated_at ? ` on ${ex.generated_at.slice(0, 16).replace("T", " ")} UTC` : "";
+    const where = ex.arch ? ` on ${ex.arch}` : "";
     const secs = ex.seconds ? ` · ${fmt(ex.seconds, 0)} s` : "";
-    src.textContent = live ? `Granite · generada ahora${secs}` : `Granite · pregenerada${where}${when}${secs}`;
+    src.textContent = live ? `Granite · generated now${secs}` : `Granite · pregenerated${where}${when}${secs}`;
     src.className = "source granite";
   } else {
-    src.textContent = "Reglas (respaldo)";
+    src.textContent = "Rules engine (fallback)";
     src.className = "source";
   }
   body.className = "";
@@ -352,7 +355,7 @@ async function step() {
   } catch (e) {
     state.playing = false;
     $("explain-body").className = "placeholder";
-    $("explain-body").textContent = "Error al llamar a /predict: " + e.message;
+    $("explain-body").textContent = "Error calling /predict: " + e.message;
   }
   updateButtons();
   return state.idx < state.days.length - 1;
@@ -377,12 +380,12 @@ function reset() {
     state.chart.update();
   }
   $("level").textContent = "—"; $("level").style.color = "";
-  $("score").textContent = "—"; $("level-date").textContent = "Pulsa «Reproducir»";
+  $("score").textContent = "—"; $("level-date").textContent = "Press “Play”";
   $("factors").innerHTML = ""; $("now-date").textContent = "—";
   ["inertia", "nonsync", "rocof", "inter", "demand"].forEach((k) => { $("m-" + k).textContent = "—"; $("h-" + k).textContent = ""; });
   $("source").textContent = "—"; $("source").className = "source";
   $("explain-body").className = "placeholder";
-  $("explain-body").textContent = "La explicación aparecerá al reproducir el replay.";
+  $("explain-body").textContent = "The explanation will appear when the replay runs.";
   $("btn-explain").disabled = true;
   updateButtons();
 }
@@ -400,9 +403,9 @@ async function explainNow() {
   if (!day || !res) return;
   const btn = $("btn-explain");
   btn.disabled = true;
-  $("source").textContent = "Granite redactando en LinuxONE…";
+  $("source").textContent = "Granite writing on LinuxONE…";
   $("explain-body").className = "placeholder";
-  $("explain-body").textContent = "Granite está redactando la explicación en LinuxONE. Puede tardar varios minutos.";
+  $("explain-body").textContent = "Granite is writing the explanation on LinuxONE. This may take several minutes.";
   const t0 = performance.now();
   try {
     const f = day.features;
@@ -416,7 +419,7 @@ async function explainNow() {
     ex.seconds = (performance.now() - t0) / 1000;
     if (state.days[state.idx] === day) renderExplanation(day, res, ex, true);
   } catch (e) {
-    $("explain-body").textContent = "Error al llamar a /explain: " + e.message;
+    $("explain-body").textContent = "Error calling /explain: " + e.message;
   }
   btn.disabled = !state.llmLive;
 }
@@ -431,12 +434,12 @@ async function init() {
     const [replay, explanations] = await Promise.all([getJSON("/app/replay"), getJSON("/app/explanations")]);
     state.days = replay.days; state.events = replay.events; state.explanations = explanations;
   } catch (e) {
-    $("explain-body").textContent = "No se pudieron cargar los datos del replay: " + e.message;
+    $("explain-body").textContent = "Could not load the replay data: " + e.message;
   }
   await loadHealth();
   buildChart();
   updateButtons();
-  // ?autoplay=1&speed=1000 -> arranca solo (util para grabar el video)
+  // ?autoplay=1&speed=1000 -> starts on its own (useful for recording the video)
   const params = new URLSearchParams(location.search);
   if (params.get("speed")) $("speed").value = params.get("speed");
   if (params.get("autoplay") === "1") play();

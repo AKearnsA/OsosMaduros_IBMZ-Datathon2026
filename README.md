@@ -121,7 +121,7 @@ Without `llama-cpp-python` or the Granite file, everything works the same and `/
 | `docs/` | Architecture diagram (`architecture.svg` / `.png`) and screenshots |
 | `check_env.py` | Environment check: CPU architecture, byte order and required libraries |
 
-Module contracts (columns, JSON formats and endpoints) are in [ARCHITECTURE.md](ARCHITECTURE.md); project rules are in [CONTEXT.md](CONTEXT.md).
+Module contracts (columns, JSON formats and endpoints) are in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Data sources
 - [REData API — Red Eléctrica](https://www.ree.es/es/apidatos): `generacion/estructura-generacion`, `demanda/evolucion`, `intercambios/todas-fronteras-programados` (peninsular system, daily).

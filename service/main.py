@@ -1,4 +1,3 @@
-import os
 import platform
 
 from fastapi import FastAPI, HTTPException, status
@@ -39,12 +38,8 @@ except Exception as e:
 
 
 def llm_available() -> bool:
-    """True solo si existen el binario de llama.cpp y el modelo Granite (si no, /explain usa reglas)."""
-    return bool(
-        explainer
-        and explainer.binary_path
-        and os.path.exists(explainer.model_path)
-    )
+    """True solo si Granite esta cargado en memoria (si no, /explain usa reglas)."""
+    return bool(explainer and explainer.available)
 
 
 @app.get("/health", status_code=status.HTTP_200_OK)
@@ -56,6 +51,7 @@ def health_check():
         "explainer_loaded": explainer is not None,
         "explainer_error": explainer_error,
         "llm_available": llm_available(),
+        "llm_error": explainer.load_error if explainer else None,
         "arch": platform.machine(),
     }
 

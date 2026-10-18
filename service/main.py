@@ -8,10 +8,15 @@ from service.utils import GridPredictor
 from explain.schemas import ExplanationRequest, ExplanationResponse
 from explain.generator import GraniteExplainer
 
+from app.router import router as dashboard_router
+
 app = FastAPI(
     title="GridZ Shield - Real-Time Risk Inference & Explanation API",
     version="1.0.0"
 )
+
+# Dashboard de replay (app/): /app, /app/replay, /app/explanations
+app.include_router(dashboard_router)
 
 # Permite que el dashboard (app/) llame a la API desde el navegador.
 app.add_middleware(

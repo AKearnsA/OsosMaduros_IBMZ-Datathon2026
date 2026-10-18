@@ -18,8 +18,11 @@ string ::= "\"" ([^"\\\n] | "\\" ["\\/bfnrt])* "\""
 ws ::= [ \t\n]*
 '''
 
-# Hilos de CPU para Granite (configurable; la mitad de los nucleos suele ir mas rapido).
-LLM_THREADS = int(os.getenv("LLM_THREADS", max(1, (os.cpu_count() or 2) // 2)))
+# Hilos de CPU para Granite (configurable con LLM_THREADS).
+# En maquinas pequenas (la VM LinuxONE tiene 3 CPUs, 1 hilo por nucleo) se usan todas;
+# en portatiles con hyperthreading, la mitad suele ir mas rapido.
+_CPUS = os.cpu_count() or 1
+LLM_THREADS = int(os.getenv("LLM_THREADS", _CPUS if _CPUS <= 4 else _CPUS // 2))
 CACHE_MAX_ITEMS = 256
 
 LEVEL_GUIDANCE = {

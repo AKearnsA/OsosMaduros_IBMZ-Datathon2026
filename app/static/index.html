@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GridZ Shield</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --panel-2: #1c232c; --border: #2a3340;
+    --text: #e6edf3; --muted: #8b98a8; --accent: #4ea1ff;
+    --stable: #2fb37a; --watch: #f0a020; --critical: #e5484d;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
+           padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--panel); }
+  h1 { margin: 0; font-size: 20px; letter-spacing: .3px; }
+  h1 span { color: var(--muted); font-weight: 400; font-size: 14px; margin-left: 8px; }
+  .pills { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pill { padding: 3px 10px; border: 1px solid var(--border); border-radius: 999px; font-size: 12px; color: var(--muted); }
+  .pill b { color: var(--text); font-weight: 600; }
+  .pill.ok b { color: var(--stable); } .pill.warn b { color: var(--watch); }
+  main { padding: 16px 20px; display: grid; gap: 16px; max-width: 1400px; margin: 0 auto; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  button, select { background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+                   border-radius: 8px; padding: 8px 14px; font: inherit; cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #04121f; font-weight: 600; }
+  .controls .now { margin-left: auto; color: var(--muted); }
+  .controls .now b { color: var(--text); }
+  .grid-top { display: grid; grid-template-columns: minmax(0, 3fr) minmax(260px, 1fr); gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; min-width: 0; }
+  .card h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); font-weight: 600; }
+  .chart-wrap { position: relative; height: 340px; }
+  .level { display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 6px; }
+  .level .badge { font-size: 38px; font-weight: 800; letter-spacing: .5px; }
+  .level .score { font-size: 15px; color: var(--muted); }
+  .level .score b { color: var(--text); font-size: 22px; }
+  .level .date { color: var(--muted); font-size: 13px; }
+  .factors { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 4px; }
+  .factor { font-size: 12px; padding: 2px 8px; border-radius: 6px; background: var(--panel-2); border: 1px solid var(--border); }
+  .metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+  .metric .label { color: var(--muted); font-size: 12px; }
+  .metric .value { font-size: 22px; font-weight: 700; margin-top: 2px; }
+  .metric .unit { font-size: 13px; color: var(--muted); font-weight: 400; margin-left: 4px; }
+  .metric .hint { font-size: 12px; margin-top: 2px; }
+  .explain-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .explain-head h2 { margin: 0; }
+  .source { font-size: 12px; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--border); color: var(--muted); }
+  .source.granite { color: var(--accent); border-color: var(--accent); }
+  .summary { font-size: 17px; margin: 4px 0 10px; }
+  .actions { margin: 0 0 10px; padding-left: 20px; }
+  .actions li { margin: 4px 0; }
+  .tech { color: var(--muted); font-size: 13px; }
+  .placeholder { color: var(--muted); }
+  footer { color: var(--muted); font-size: 12px; padding: 4px 20px 20px; max-width: 1400px; margin: 0 auto; }
+  .stable { color: var(--stable); } .watch { color: var(--watch); } .critical { color: var(--critical); }
+  @media (max-width: 900px) {
+    .grid-top { grid-template-columns: 1fr; }
+    .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    main, header, footer { padding-left: 16px; padding-right: 16px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>GridZ Shield <span>Índice de riesgo de la red peninsular · OsosMaduros · IBM Z Datathon 2026</span></h1>
+  <div class="pills">
+    <div class="pill" id="pill-arch">Arquitectura: <b>…</b></div>
+    <div class="pill" id="pill-model">Modelo predictivo: <b>…</b></div>
+    <div class="pill" id="pill-llm">Granite: <b>…</b></div>
+  </div>
+</header>
+
+<main>
+  <div class="controls">
+    <button class="primary" id="btn-play">▶ Reproducir</button>
+    <button id="btn-pause" disabled>⏸ Pausa</button>
+    <button id="btn-step">Siguiente día</button>
+    <button id="btn-reset">↺ Reiniciar</button>
+    <label>Velocidad
+      <select id="speed">
+        <option value="1000">1 s / día</option>
+        <option value="2500" selected>2,5 s / día</option>
+        <option value="5000">5 s / día</option>
+      </select>
+    </label>
+    <div class="now">Previsión para: <b id="now-date">—</b></div>
+  </div>
+
+  <div class="grid-top">
+    <div class="card">
+      <h2>Riesgo previsto para el día siguiente</h2>
+      <div class="chart-wrap"><canvas id="chart"></canvas></div>
+      <div class="placeholder" id="chart-error" hidden>No se pudo cargar la librería de gráficos (Chart.js). El resto del panel funciona.</div>
+    </div>
+    <div class="card level">
+      <h2>Nivel previsto</h2>
+      <div class="badge" id="level">—</div>
+      <div class="score">Grid Risk Index <b id="score">—</b> / 1</div>
+      <div class="date" id="level-date">Pulsa «Reproducir»</div>
+      <div class="factors" id="factors"></div>
+    </div>
+  </div>
+
+  <div class="metrics">
+    <div class="card metric"><div class="label">Inercia estimada</div><div class="value" id="m-inertia">—</div><div class="hint" id="h-inertia"></div></div>
+    <div class="card metric"><div class="label">Eólica + solar</div><div class="value" id="m-nonsync">—</div><div class="hint" id="h-nonsync"></div></div>
+    <div class="card metric"><div class="label">RoCoF estimado (pérdida 1 GW)</div><div class="value" id="m-rocof">—</div><div class="hint" id="h-rocof"></div></div>
+    <div class="card metric"><div class="label">Intercambio internacional</div><div class="value" id="m-inter">—</div><div class="hint" id="h-inter"></div></div>
+    <div class="card metric"><div class="label">Demanda media</div><div class="value" id="m-demand">—</div><div class="hint" id="h-demand"></div></div>
+  </div>
+
+  <div class="card">
+    <div class="explain-head">
+      <h2>Explicación para el operador</h2>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <span class="source" id="source">—</span>
+        <button id="btn-explain" disabled>Generar ahora con Granite</button>
+      </div>
+    </div>
+    <div id="explain-body" class="placeholder">La explicación aparecerá al reproducir el replay.</div>
+  </div>
+</main>
+
+<footer>
+  Replay retrospectivo con datos diarios reales de REData (sistema peninsular, 2025). Cada previsión se calcula con los datos del día anterior.
+  El 28-04-2025 no se usa como entrada del modelo porque sus datos están distorsionados por el propio apagón.
+  La inercia y el RoCoF son estimaciones físicas a partir del mix de generación, no medidas.
+  GridZ Shield es una herramienta de apoyo a la decisión: no controla la red.
+</footer>
+
+<script>
+const COLORS = { Stable: "#2fb37a", Watch: "#f0a020", Critical: "#e5484d" };
+const LEVEL_ES = { Stable: "Estable", Watch: "Vigilancia", Critical: "Crítico" };
+const FACTOR_ES = {
+  inertia_est_gws: "Inercia baja",
+  nonsync_share: "Mucha eólica y solar",
+  interconnection_balance_mw: "Intercambio elevado",
+};
+// Percentiles 2021-2024 (los mismos que usan service/ y explain/)
+const REF = { inertiaLow: 73.5, inertiaHigh: 94.1, nonsyncLow: 0.304, nonsyncHigh: 0.464,
+              rocofLow: 0.266, rocofHigh: 0.340, interHigh: 2630 };
+
+const state = { days: [], events: [], explanations: {}, results: {}, idx: -1,
+                playing: false, chart: null };
+const $ = (id) => document.getElementById(id);
+const fmt = (v, d = 0) => v.toLocaleString("es-ES", { minimumFractionDigits: d, maximumFractionDigits: d });
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const shortDate = (iso) => { const [y, m, d] = iso.split("-"); return `${d}-${m}`; };
+
+async function getJSON(url, options) {
+  const res = await fetch(url, options);
+  if (!res.ok) throw new Error(`${url} -> HTTP ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+function band(value, low, high, lowText, highText) {
+  if (value < low) return lowText;
+  if (value > high) return highText;
+  return ["Normal", ""];
+}
+
+// ---------- Cabecera ----------
+async function loadHealth() {
+  try {
+    const h = await getJSON("/health");
+    $("pill-arch").innerHTML = `Arquitectura: <b>${h.arch}</b>`;
+    $("pill-arch").className = "pill " + (h.arch === "s390x" ? "ok" : "warn");
+    $("pill-model").innerHTML = `Modelo predictivo: <b>${h.model_loaded ? "cargado" : "no cargado"}</b>`;
+    $("pill-model").className = "pill " + (h.model_loaded ? "ok" : "warn");
+    const pre = Object.keys(state.explanations).length;
+    const llm = h.llm_available ? "en vivo" : (pre ? `${pre} pregeneradas` : "no disponible");
+    $("pill-llm").innerHTML = `Granite: <b>${llm}</b>`;
+    $("pill-llm").className = "pill " + (h.llm_available || pre ? "ok" : "warn");
+    state.llmLive = h.llm_available;
+  } catch (e) {
+    $("pill-arch").innerHTML = `API: <b>sin conexión</b>`;
+    $("pill-arch").className = "pill warn";
+  }
+}
+
+// ---------- Gráfico ----------
+const bandsPlugin = {
+  id: "riskBands",
+  beforeDatasetsDraw(chart) {
+    const { ctx, chartArea: a, scales: { y } } = chart;
+    if (!a) return;
+    [[0, 0.5, COLORS.Stable], [0.5, 0.85, COLORS.Watch], [0.85, 1, COLORS.Critical]].forEach(([lo, hi, c]) => {
+      ctx.save();
+      ctx.fillStyle = c + "1f";
+      const top = y.getPixelForValue(hi), bottom = y.getPixelForValue(lo);
+      ctx.fillRect(a.left, top, a.right - a.left, bottom - top);
+      ctx.restore();
+    });
+  },
+};
+const eventPlugin = {
+  id: "eventMarker",
+  afterDatasetsDraw(chart) {
+    const { ctx, chartArea: a, scales: { x } } = chart;
+    state.events.forEach((ev) => {
+      const i = chart.data.labels.indexOf(shortDate(ev.date));
+      if (i < 0) return;
+      const px = x.getPixelForValue(i);
+      ctx.save();
+      ctx.strokeStyle = "#e6edf3"; ctx.setLineDash([5, 4]); ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(px, a.top); ctx.lineTo(px, a.bottom); ctx.stroke();
+      ctx.setLineDash([]); ctx.fillStyle = "#e6edf3"; ctx.font = "12px system-ui";
+      ctx.textAlign = "right"; ctx.fillText(ev.label.replace("Apagon iberico", "Apagón ibérico"), px - 6, a.top + 14);
+      ctx.restore();
+    });
+  },
+};
+
+function buildChart() {
+  if (typeof Chart === "undefined") { $("chart-error").hidden = false; return; }
+  const labels = state.days.map((d) => shortDate(d.forecast_date));
+  const empty = labels.map(() => null);
+  state.chart = new Chart($("chart"), {
+    data: {
+      labels,
+      datasets: [
+        { type: "line", label: "Grid Risk Index", data: [...empty], yAxisID: "y",
+          borderColor: "#e6edf3", borderWidth: 2, tension: 0.25, spanGaps: true,
+          pointRadius: 6, pointBackgroundColor: [...empty], pointBorderColor: "#0d1117" },
+        { type: "bar", label: "Inercia estimada (GW·s)", data: [...empty], yAxisID: "y1",
+          backgroundColor: "rgba(78,161,255,0.25)", borderColor: "rgba(78,161,255,0.6)", borderWidth: 1 },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: { duration: 400 },
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        x: { ticks: { color: "#8b98a8" }, grid: { color: "#1f2731" } },
+        y: { min: 0, max: 1, title: { display: true, text: "Grid Risk Index", color: "#8b98a8" },
+             ticks: { color: "#8b98a8" }, grid: { color: "#1f2731" } },
+        y1: { position: "right", min: 0, title: { display: true, text: "Inercia (GW·s)", color: "#8b98a8" },
+              ticks: { color: "#8b98a8" }, grid: { display: false } },
+      },
+      plugins: {
+        legend: { labels: { color: "#e6edf3" } },
+        tooltip: { callbacks: { afterLabel: (c) => {
+          if (c.datasetIndex !== 0) return "";
+          const r = state.results[state.days[c.dataIndex].forecast_date];
+          return r ? `Nivel: ${LEVEL_ES[r.level]}` : "";
+        } } },
+      },
+    },
+    plugins: [bandsPlugin, eventPlugin],
+  });
+}
+
+// ---------- Paneles ----------
+function setMetric(id, value, hint) {
+  $("m-" + id).innerHTML = value;
+  $("h-" + id).textContent = hint[0];
+  $("h-" + id).className = "hint " + hint[1];
+}
+
+function renderDay(day, res) {
+  const f = day.features;
+  $("now-date").textContent = new Date(day.forecast_date + "T12:00:00").toLocaleDateString("es-ES",
+    { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const lvl = $("level");
+  lvl.textContent = LEVEL_ES[res.level] || res.level;
+  lvl.style.color = COLORS[res.level];
+  $("score").textContent = fmt(res.risk_score, 2);
+  $("level-date").textContent = `Previsión para el ${shortDate(day.forecast_date)} con datos del ${shortDate(day.date)}`;
+  $("factors").innerHTML = "";
+  (res.top_factors.length ? res.top_factors : [null]).forEach((k) => {
+    const el = document.createElement("span");
+    el.className = "factor";
+    el.textContent = k ? (FACTOR_ES[k] || k) : "Ningún factor fuera de lo normal";
+    $("factors").appendChild(el);
+  });
+
+  setMetric("inertia", `${fmt(f.inertia_est_gws, 1)}<span class="unit">GW·s</span>`,
+    band(f.inertia_est_gws, REF.inertiaLow, REF.inertiaHigh, ["Baja", "critical"], ["Alta", "stable"]));
+  setMetric("nonsync", `${fmt(f.nonsync_share * 100)}<span class="unit">%</span>`,
+    band(f.nonsync_share, REF.nonsyncLow, REF.nonsyncHigh, ["Baja", ""], ["Alta", "watch"]));
+  setMetric("rocof", `${fmt(f.rocof_est_hz_s, 3)}<span class="unit">Hz/s</span>`,
+    band(f.rocof_est_hz_s, REF.rocofLow, REF.rocofHigh, ["Bajo", "stable"], ["Alto", "critical"]));
+  const exporting = f.interconnection_balance_mw < 0;
+  setMetric("inter", `${fmt(Math.abs(f.interconnection_balance_mw))}<span class="unit">MW</span>`,
+    [`${exporting ? "Exportación" : "Importación"}${Math.abs(f.interconnection_balance_mw) > REF.interHigh ? " elevada" : ""}`,
+     Math.abs(f.interconnection_balance_mw) > REF.interHigh ? "watch" : ""]);
+  setMetric("demand", `${fmt(f.demand_mw)}<span class="unit">MW</span>`, ["", ""]);
+
+  renderExplanation(day, res, state.explanations[day.forecast_date]);
+  $("btn-explain").disabled = !state.llmLive;
+
+  if (state.chart) {
+    const ds = state.chart.data.datasets;
+    ds[0].data[state.idx] = res.risk_score;
+    ds[0].pointBackgroundColor[state.idx] = COLORS[res.level];
+    ds[1].data[state.idx] = f.inertia_est_gws;
+    state.chart.update();
+  }
+}
+
+function renderExplanation(day, res, ex, live = false) {
+  const body = $("explain-body");
+  const src = $("source");
+  if (!ex) {
+    src.textContent = "sin explicación";
+    src.className = "source";
+    body.className = "placeholder";
+    body.textContent = state.llmLive
+      ? "No hay explicación pregenerada para este día. Pulsa «Generar ahora con Granite» (en LinuxONE tarda varios minutos)."
+      : "No hay explicación pregenerada para este día (ejecuta app/pregenerate.py en LinuxONE).";
+    return;
+  }
+  if (ex.source === "granite") {
+    const when = ex.generated_at ? ` el ${ex.generated_at.slice(0, 16).replace("T", " ")} UTC` : "";
+    const where = ex.arch ? ` en ${ex.arch}` : "";
+    const secs = ex.seconds ? ` · ${fmt(ex.seconds, 0)} s` : "";
+    src.textContent = live ? `Granite · generada ahora${secs}` : `Granite · pregenerada${where}${when}${secs}`;
+    src.className = "source granite";
+  } else {
+    src.textContent = "Reglas (respaldo)";
+    src.className = "source";
+  }
+  body.className = "";
+  body.innerHTML = "";
+  const p = document.createElement("p"); p.className = "summary"; p.textContent = ex.summary;
+  const ul = document.createElement("ul"); ul.className = "actions";
+  ex.recommended_actions.forEach((a) => { const li = document.createElement("li"); li.textContent = a; ul.appendChild(li); });
+  const t = document.createElement("div"); t.className = "tech"; t.textContent = ex.technical_details;
+  body.append(p, ul, t);
+}
+
+// ---------- Replay ----------
+async function predict(day) {
+  return getJSON("/predict", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ timestamp: day.timestamp, ...day.features }),
+  });
+}
+
+async function step() {
+  if (state.idx >= state.days.length - 1) return false;
+  state.idx += 1;
+  const day = state.days[state.idx];
+  try {
+    const res = state.results[day.forecast_date] || await predict(day);
+    state.results[day.forecast_date] = res;
+    renderDay(day, res);
+  } catch (e) {
+    state.playing = false;
+    $("explain-body").className = "placeholder";
+    $("explain-body").textContent = "Error al llamar a /predict: " + e.message;
+  }
+  updateButtons();
+  return state.idx < state.days.length - 1;
+}
+
+async function play() {
+  if (state.playing) return;
+  state.playing = true; updateButtons();
+  while (state.playing && await step()) {
+    await sleep(Number($("speed").value));
+  }
+  state.playing = false; updateButtons();
+}
+
+function reset() {
+  state.playing = false; state.idx = -1;
+  if (state.chart) {
+    state.chart.data.datasets.forEach((ds) => {
+      ds.data = ds.data.map(() => null);
+      if (ds.pointBackgroundColor) ds.pointBackgroundColor = ds.pointBackgroundColor.map(() => null);
+    });
+    state.chart.update();
+  }
+  $("level").textContent = "—"; $("level").style.color = "";
+  $("score").textContent = "—"; $("level-date").textContent = "Pulsa «Reproducir»";
+  $("factors").innerHTML = ""; $("now-date").textContent = "—";
+  ["inertia", "nonsync", "rocof", "inter", "demand"].forEach((k) => { $("m-" + k).textContent = "—"; $("h-" + k).textContent = ""; });
+  $("source").textContent = "—"; $("source").className = "source";
+  $("explain-body").className = "placeholder";
+  $("explain-body").textContent = "La explicación aparecerá al reproducir el replay.";
+  $("btn-explain").disabled = true;
+  updateButtons();
+}
+
+function updateButtons() {
+  const atEnd = state.idx >= state.days.length - 1;
+  $("btn-play").disabled = state.playing || atEnd;
+  $("btn-pause").disabled = !state.playing;
+  $("btn-step").disabled = state.playing || atEnd;
+}
+
+async function explainNow() {
+  const day = state.days[state.idx];
+  const res = state.results[day.forecast_date];
+  if (!day || !res) return;
+  const btn = $("btn-explain");
+  btn.disabled = true;
+  $("source").textContent = "Granite redactando en LinuxONE…";
+  $("explain-body").className = "placeholder";
+  $("explain-body").textContent = "Granite está redactando la explicación en LinuxONE. Puede tardar varios minutos.";
+  const t0 = performance.now();
+  try {
+    const f = day.features;
+    const ex = await getJSON("/explain", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ timestamp: day.timestamp, risk_score: res.risk_score, level: res.level,
+        top_factors: res.top_factors, inertia_est_gws: f.inertia_est_gws, nonsync_share: f.nonsync_share,
+        interconnection_balance_mw: f.interconnection_balance_mw, rocof_est_hz_s: f.rocof_est_hz_s,
+        demand_mw: f.demand_mw }),
+    });
+    ex.seconds = (performance.now() - t0) / 1000;
+    if (state.days[state.idx] === day) renderExplanation(day, res, ex, true);
+  } catch (e) {
+    $("explain-body").textContent = "Error al llamar a /explain: " + e.message;
+  }
+  btn.disabled = !state.llmLive;
+}
+
+async function init() {
+  $("btn-play").onclick = play;
+  $("btn-pause").onclick = () => { state.playing = false; };
+  $("btn-step").onclick = step;
+  $("btn-reset").onclick = reset;
+  $("btn-explain").onclick = explainNow;
+  try {
+    const [replay, explanations] = await Promise.all([getJSON("/app/replay"), getJSON("/app/explanations")]);
+    state.days = replay.days; state.events = replay.events; state.explanations = explanations;
+  } catch (e) {
+    $("explain-body").textContent = "No se pudieron cargar los datos del replay: " + e.message;
+  }
+  await loadHealth();
+  buildChart();
+  updateButtons();
+  // ?autoplay=1&speed=1000 -> arranca solo (util para grabar el video)
+  const params = new URLSearchParams(location.search);
+  if (params.get("speed")) $("speed").value = params.get("speed");
+  if (params.get("autoplay") === "1") play();
+}
+init();
+</script>
+</body>
+</html>

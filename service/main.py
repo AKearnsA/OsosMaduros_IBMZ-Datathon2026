@@ -63,11 +63,7 @@ def health_check():
 @app.post("/predict", response_model=InferenceResponse, status_code=status.HTTP_200_OK)
 def predict_risk(telemetry: TelemetryInput):
     if predictor is None:
-<<<<<<< HEAD
-        raise HTTPException(status_code=503, detail="Modelo predictivo no disponible.")
-=======
         raise HTTPException(status_code=503, detail=f"Modelo predictivo no disponible: {predictor_error}")
->>>>>>> origin/fix/service-input
 
     try:
         data = telemetry.model_dump()

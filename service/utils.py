@@ -1,9 +1,13 @@
 import os
+from pathlib import Path
+
 import joblib
 import pandas as pd
 from typing import Tuple, List
 
-MODEL_PATH = os.getenv("GRID_MODEL_PATH", "model/grid_model.joblib")
+# Ruta relativa a este fichero: funciona se arranque uvicorn desde donde se arranque.
+DEFAULT_MODEL_PATH = Path(__file__).resolve().parent.parent / "model" / "grid_model.joblib"
+MODEL_PATH = os.getenv("GRID_MODEL_PATH", str(DEFAULT_MODEL_PATH))
 
 # Umbrales para top_factors: percentiles de los datos de entrenamiento (2021-2024).
 INERTIA_LOW_GWS = 73.5  # p25 de inertia_est_gws
@@ -56,15 +60,25 @@ class GridPredictor:
             level = "Critical"
             risk_score = round(min(1.0, 0.85 + (pred_rocof - self.p95) * 1.5), 2)
 
-        top_factors = []
-        if data["inertia_est_gws"] < INERTIA_LOW_GWS:
-            top_factors.append("inertia_est_gws")
-        if data["nonsync_share"] > NONSYNC_HIGH:
-            top_factors.append("nonsync_share")
-        if abs(data["interconnection_balance_mw"]) > INTERCONNECTION_HIGH_MW:
-            top_factors.append("interconnection_balance_mw")
+        return risk_score, level, self._top_factors(data, level)
 
-        if not top_factors:
-            top_factors = ["nonsync_share", "interconnection_balance_mw"]
+    @staticmethod
+    def _top_factors(data: dict, level: str) -> List[str]:
+        """
+        Ordena los factores por cuanto superan su umbral (>1 = fuera de lo normal).
+        En un dia Stable sin ningun factor fuera de lo normal devuelve [] para no
+        presentar como riesgo algo que no lo es.
+        """
+        severity = {
+            "inertia_est_gws": INERTIA_LOW_GWS / data["inertia_est_gws"],
+            "nonsync_share": data["nonsync_share"] / NONSYNC_HIGH,
+            "interconnection_balance_mw": abs(data["interconnection_balance_mw"])
+            / INTERCONNECTION_HIGH_MW,
+        }
+        ranked = sorted(severity, key=severity.get, reverse=True)
+        above_threshold = [f for f in ranked if severity[f] > 1.0]
 
-        return risk_score, level, top_factors[:2]
+        if above_threshold:
+            return above_threshold[:2]
+        # Watch/Critical sin ningun factor fuera de umbral: se indica el mas cercano.
+        return ranked[:1] if level != "Stable" else []

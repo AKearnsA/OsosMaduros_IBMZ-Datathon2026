@@ -1,0 +1,132 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="810" viewBox="0 0 1240 810" font-family="IBM Plex Sans, Segoe UI, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#525252"/>
+    </marker>
+    <style>
+      .title { font-size: 15px; font-weight: 700; fill: #161616; }
+      .sub { font-size: 12.5px; fill: #393939; }
+      .small { font-size: 11.5px; fill: #525252; }
+      .label { font-size: 11.5px; fill: #393939; font-style: italic; }
+      .section { font-size: 12px; font-weight: 700; fill: #0f62fe; letter-spacing: .6px; }
+      .box { fill: #ffffff; stroke: #8d8d8d; stroke-width: 1.2; }
+      .data { fill: #defbe6; stroke: #24a148; stroke-width: 1.4; }
+      .ml { fill: #edf5ff; stroke: #0f62fe; stroke-width: 1.4; }
+      .ai { fill: #f6f2ff; stroke: #8a3ffc; stroke-width: 1.4; }
+      .ui { fill: #fff8e1; stroke: #b28600; stroke-width: 1.4; }
+      .file { fill: #f4f4f4; stroke: #8d8d8d; stroke-width: 1.2; stroke-dasharray: 4 3; }
+      .ext { fill: #ffffff; stroke: #525252; stroke-width: 1.4; }
+      .flow { fill: none; stroke: #525252; stroke-width: 1.6; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect width="1240" height="810" fill="#ffffff"/>
+  <text x="30" y="24" class="title" style="font-size:18px">GridZ Shield · architecture (OsosMaduros · IBM Z Datathon 2026)</text>
+
+  <!-- External sources -->
+  <rect x="30" y="145" width="210" height="104" rx="8" class="ext"/>
+  <text x="45" y="173" class="title">REData API</text>
+  <text x="45" y="193" class="sub">Red Eléctrica (public)</text>
+  <text x="45" y="211" class="small">generation by technology,</text>
+  <text x="45" y="226" class="small">demand, cross-border exchanges</text>
+  <text x="45" y="241" class="small">HTTPS / JSON, no token</text>
+
+  <rect x="1030" y="585" width="190" height="104" rx="8" class="ext"/>
+  <text x="1045" y="612" class="title">IBM Granite 3.3 2B</text>
+  <text x="1045" y="630" class="sub">Instruct · Apache 2.0</text>
+  <text x="1045" y="648" class="small">big-endian GGUF for s390x</text>
+  <text x="1045" y="663" class="small">Hugging Face,</text>
+  <text x="1045" y="678" class="small">downloaded once into the VM</text>
+
+  <!-- LinuxONE VM -->
+  <rect x="270" y="40" width="730" height="720" rx="12" fill="#f2f4f8" stroke="#0f62fe" stroke-width="2"/>
+  <text x="290" y="64" class="section" style="font-size:13.5px">IBM LinuxONE Community Cloud VM · s390x (IBM z17) · 3 vCPU</text>
+  <rect x="290" y="78" width="690" height="665" rx="10" fill="#ffffff" stroke="#6f6f6f" stroke-width="1.2" stroke-dasharray="6 4"/>
+  <text x="305" y="98" class="small">Docker container · Jupyter Lab image · Python 3 (/opt/venv) · repo in ~/shared</text>
+
+  <text x="320" y="122" class="section">BATCH · RUN ONCE IN THE VM</text>
+  <!-- ingest -->
+  <rect x="320" y="132" width="200" height="110" rx="8" class="data"/>
+  <text x="333" y="156" class="title">data/ingest_apis.py</text>
+  <text x="333" y="176" class="sub">daily features 2021–2025</text>
+  <text x="333" y="194" class="small">peninsular system, MWh → MW</text>
+  <text x="333" y="210" class="small">physics-based estimates:</text>
+  <text x="333" y="226" class="small">inertia (GW·s), RoCoF (Hz/s)</text>
+  <!-- parquet -->
+  <rect x="545" y="150" width="140" height="74" rx="8" class="file"/>
+  <text x="557" y="178" class="title">features.parquet</text>
+  <text x="557" y="197" class="small">1,826 days · fastparquet</text>
+  <text x="557" y="212" class="small">big-endian safe</text>
+  <!-- train -->
+  <rect x="710" y="132" width="250" height="110" rx="8" class="ml"/>
+  <text x="723" y="156" class="title">model/train.py · scikit-learn</text>
+  <text x="723" y="176" class="sub">RandomForest → next-day RoCoF</text>
+  <text x="723" y="194" class="small">IsolationForest → unusual days</text>
+  <text x="723" y="210" class="small">train 2021–2024 · test 2025</text>
+  <text x="723" y="226" class="small">risk thresholds: p75 / p95</text>
+  <!-- joblib -->
+  <rect x="760" y="264" width="150" height="50" rx="8" class="file"/>
+  <text x="773" y="285" class="title" style="font-size:13.5px">grid_model.joblib</text>
+  <text x="773" y="302" class="small">trained on s390x</text>
+
+  <text x="320" y="366" class="section">ONLINE · 127.0.0.1:8000</text>
+  <!-- service -->
+  <rect x="320" y="378" width="280" height="140" rx="8" class="ml"/>
+  <text x="333" y="402" class="title">service/ · FastAPI + uvicorn</text>
+  <text x="333" y="424" class="sub">POST /predict → Grid Risk Index</text>
+  <text x="333" y="442" class="small">{risk_score, level, top_factors}</text>
+  <text x="333" y="460" class="small">Stable / Watch / Critical</text>
+  <text x="333" y="482" class="sub">POST /explain · GET /health</text>
+  <text x="333" y="500" class="small">/health reports arch = s390x</text>
+  <!-- explain -->
+  <rect x="650" y="378" width="300" height="140" rx="8" class="ai"/>
+  <text x="663" y="402" class="title">explain/ · Generative AI</text>
+  <text x="663" y="424" class="sub">Granite via llama-cpp-python</text>
+  <text x="663" y="442" class="small">zDNN backend (NNPA) on IBM Z</text>
+  <text x="663" y="460" class="small">JSON forced by GBNF grammar</text>
+  <text x="663" y="478" class="small">figures computed in code (no hallucinated numbers)</text>
+  <text x="663" y="496" class="small">rule-based fallback if the LLM is unavailable</text>
+  <!-- app -->
+  <rect x="320" y="572" width="280" height="140" rx="8" class="ui"/>
+  <text x="333" y="596" class="title">app/ · operator dashboard</text>
+  <text x="333" y="618" class="sub">GET /app · replay 14–28 Apr 2025</text>
+  <text x="333" y="636" class="small">risk timeline, inertia, blackout marker</text>
+  <text x="333" y="654" class="small">Chart.js (loaded by the browser)</text>
+  <text x="333" y="676" class="sub">pregenerate.py → explanations.json</text>
+  <text x="333" y="694" class="small">Granite output cached for the demo</text>
+  <!-- model file -->
+  <rect x="650" y="600" width="300" height="70" rx="8" class="file"/>
+  <text x="663" y="626" class="title" style="font-size:13.5px">~/shared/models/</text>
+  <text x="663" y="645" class="small">granite-3.3-2b-instruct-be.Q4_K_M.gguf</text>
+  <text x="663" y="660" class="small">shared volume (survives container restarts)</text>
+
+  <!-- Operator -->
+  <rect x="1030" y="378" width="190" height="112" rx="8" class="ext"/>
+  <text x="1045" y="405" class="title">Operator browser</text>
+  <text x="1045" y="425" class="sub">Grid Risk Index +</text>
+  <text x="1045" y="442" class="sub">Granite explanation</text>
+  <text x="1045" y="465" class="small">decision support only:</text>
+  <text x="1045" y="479" class="small">never controls the grid</text>
+
+  <!-- Flows -->
+  <path class="flow" d="M240,195 L318,195"/>
+  <path class="flow" d="M520,187 L543,187"/>
+  <path class="flow" d="M685,187 L708,187"/>
+  <path class="flow" d="M835,242 L835,262"/>
+  <path class="flow" d="M835,314 L835,334 L560,334 L560,376"/>
+  <text x="640" y="327" class="label">load model</text>
+  <path class="flow" d="M570,224 L570,254 L305,254 L305,640 L318,640"/>
+  <text x="314" y="272" class="label">replay rows (same features as training)</text>
+  <path class="flow" d="M460,572 L460,520"/>
+  <text x="468" y="552" class="label">POST /predict</text>
+  <path class="flow" d="M600,448 L648,448"/>
+  <text x="604" y="440" class="label">/explain</text>
+  <path class="flow" d="M800,600 L800,520"/>
+  <text x="808" y="566" class="label">loaded once at start-up</text>
+  <path class="flow" d="M1030,635 L952,635"/>
+  <path class="flow" d="M1030,425 L1012,425 L1012,352 L625,352 L625,420 L602,420" style="marker-start:url(#arrow)"/>
+  <text x="640" y="371" class="label">HTTP (GET /app, /predict) via SSH tunnel or Jupyter proxy</text>
+  <text x="333" y="730" class="small">app/ routes are served by the same FastAPI process</text>
+
+  <text x="30" y="790" class="small">All data processing, model training, inference and Granite text generation run inside the LinuxONE VM. No data or prompts leave the mainframe.</text>
+</svg>

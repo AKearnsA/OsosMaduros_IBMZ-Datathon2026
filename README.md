@@ -14,7 +14,7 @@ On **28 April 2025** the Iberian Peninsula suffered a complete blackout. As wind
 Operators need to know **when the grid is entering a low-inertia period**, and why, so they can prepare in advance (for example, by scheduling additional synchronous generation or reserves).
 
 ## What GridZ Shield does
-1. **Ingests official data** from Red Eléctrica's public REData API: daily generation by technology, demand and cross-border exchanges for the peninsular system, 2021–2025 (1,826 days).
+1. **Ingests official data** from Red Eléctrica's public REData API: daily generation by technology, demand and cross-border exchanges for the peninsular system, 2021–2025 (1,826 days; 2021–2024 for training, 2025 kept for testing and for the replay).
 2. **Estimates inertia and RoCoF from physics.** Each technology gets a typical inertia constant *H* (nuclear 6 s, gas 4.3 s, hydro 4 s, solar thermal 3 s, wind and PV 0 s). System kinetic energy is `E = Σ Hᵢ·Pᵢ`, and the expected initial RoCoF after losing a 1,000 MW unit is `RoCoF = ΔP·f₀ / (2·E)`.
 3. **Forecasts tomorrow's risk.** A scikit-learn RandomForest predicts the next day's estimated RoCoF; an IsolationForest flags unusual days. The prediction is mapped to the Grid Risk Index with thresholds learned from 2021–2024 (75th and 95th percentiles).
 4. **Explains it with Granite.** IBM Granite 3.3 2B Instruct, running locally on LinuxONE through llama.cpp, writes a one-sentence summary and two actions for the operator. All figures are computed in code and passed to the model, so it cannot invent numbers.
@@ -33,15 +33,17 @@ Operators need to know **when the grid is entering a low-inertia period**, and w
 This combines the two AI patterns of the datathon labs: **Predictive AI (multi-model)** — regression plus anomaly detection — and **Predictive AI + Generative AI** — Granite explaining the prediction.
 
 ## Results
-Evaluated on 2025, a year the model never saw during training (362 days):
+The data covers 2021–2025, but the models are **trained only on 2021–2024**; 2025 is held out as a test year and is also the year shown in the dashboard replay. All results below are on 2025 (362 days), compared with a simple baseline that assumes "tomorrow will be like today".
 
-| Metric | Value |
-|---|---|
-| Next-day RoCoF error (MAE), GridZ Shield | 0.0222 Hz/s |
-| Next-day RoCoF error (MAE), baseline "tomorrow = today" | 0.0251 Hz/s |
-| Improvement over the baseline | **11.6 %** |
-| Risk level (Stable / Watch / Critical) matching the actual level | 82.9 % |
-| Actual `Critical` days also forecast as `Critical` | 44 % (11 of 25) |
+| Metric (2025, unseen during training) | GridZ Shield | Baseline "tomorrow = today" |
+|---|---|---|
+| Next-day RoCoF error (MAE) | **0.0222 Hz/s** | 0.0251 Hz/s (GridZ Shield is 11.6 % better) |
+| Risk level (Stable / Watch / Critical) matching the actual level | **82.9 %** | 80.1 % |
+| Actual `Critical` days flagged at least as `Watch` | 92 % (23 of 25) | 92 % (23 of 25) |
+| Actual `Critical` days forecast exactly as `Critical` | 44 % (11 of 25) | **64 % (16 of 25)** |
+| `Critical` forecasts that were right (precision) | **79 % (11 of 14)** | 64 % (16 of 25) |
+
+How to read it: GridZ Shield is more accurate overall and raises far fewer false `Critical` alarms (3 versus 9), but it is **conservative on extreme days**: like most regression models it tends to under-predict peaks, so 12 of the 25 most critical days were forecast as `Watch` rather than `Critical`. Almost all of them (23 of 25) still received an alert (`Watch` or `Critical`). Detecting more `Critical` days is possible by lowering the threshold, at the cost of more false alarms; we kept the thresholds learned from the training years instead of tuning them on the test year.
 
 **Blackout case study (retrospective).** In the replay, the Easter week before the blackout (16–21 April 2025, low demand and high solar) reaches `Critical`, and most of the two weeks before 28 April stay in `Watch` or `Critical`. The forecast made on 26 April for the 27th is `Critical` (estimated inertia 57 GW·s against a typical 73–94 GW·s, with Spain exporting about 3.3 GW).
 
@@ -75,17 +77,39 @@ python3 model/train.py
 # 3. Pre-generate Granite explanations for the demo days (several minutes per day, resumable)
 python3 -m app.pregenerate --start 2025-04-24 --end 2025-04-28
 
-# 4. Start the API and the dashboard
+# 4. Start the API and the dashboard (loading Granite takes about 30-40 s on the VM)
 nohup python3 -m uvicorn service.main:app --host 127.0.0.1 --port 8000 > api.log 2>&1 &
-curl -s http://127.0.0.1:8000/health
+sleep 40 && tail -3 api.log
+curl -s http://127.0.0.1:8000/health      # expect "arch":"s390x" and "llm_available":true
+
+# Stop it with: pkill -f "uvicorn service.main"
 ```
 
-Open the dashboard from your computer through an SSH tunnel (`ssh -i <key.pem> -L 8000:127.0.0.1:8000 <user>@<vm-ip>`) at `http://localhost:8000/app?autoplay=1`.
+The API only listens inside the VM. To open the dashboard from your computer, create an SSH tunnel (`ssh -i <key.pem> -L 8000:127.0.0.1:8000 <user>@<vm-ip>`) and browse to `http://localhost:8000/app?autoplay=1`. Some networks block SSH (port 22); if the tunnel times out, try another network.
 
 Configuration (environment variables): `GRID_MODEL_PATH` (default `model/grid_model.joblib`), `GRANITE_MODEL_PATH` (default `~/shared/models/granite-3.3-2b-instruct-be.Q4_K_M.gguf`), `LLM_THREADS` (default: all CPUs on machines with up to 4, otherwise half).
 
-### Local development (x86)
-The same code runs on a laptop with `pip install -r requirements.txt` and a standard (little-endian) Granite GGUF, for example [bartowski/ibm-granite_granite-3.3-2b-instruct-GGUF](https://huggingface.co/bartowski/ibm-granite_granite-3.3-2b-instruct-GGUF), set through `GRANITE_MODEL_PATH`. Big-endian models only load on s390x.
+### Local development (x86 laptop)
+The same code runs on a laptop (tested on Windows 11 with Python 3.14). Big-endian models only load on s390x, so use the standard (little-endian) Granite GGUF.
+
+```bash
+python -m venv .venv
+# Windows: .venv\Scripts\activate    ·    Linux/macOS: source .venv/bin/activate
+pip install -r requirements.txt
+# Optional, for Granite: prebuilt CPU wheel (PyPI only has the source package)
+pip install llama-cpp-python --prefer-binary --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+
+python data/ingest_apis.py        # about 2-3 minutes
+python model/train.py
+
+# Optional: Granite 3.3 2B Instruct, little-endian (1.5 GB)
+# https://huggingface.co/bartowski/ibm-granite_granite-3.3-2b-instruct-GGUF  ->  ibm-granite_granite-3.3-2b-instruct-Q4_K_M.gguf
+# then set GRANITE_MODEL_PATH to the downloaded file
+
+python -m uvicorn service.main:app --host 127.0.0.1 --port 8000
+# open http://127.0.0.1:8000/app
+```
+Without `llama-cpp-python` or the Granite file, everything works the same and `/explain` returns rule-based explanations (`"source": "rules"`).
 
 ## Repository layout
 | Folder | Content |

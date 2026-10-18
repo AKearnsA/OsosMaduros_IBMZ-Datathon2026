@@ -3,54 +3,54 @@ import json
 import threading
 from explain.schemas import ExplanationRequest, ExplanationResponse
 
-# Granite 3.3 2B Instruct en big-endian para s390x (llama.cpp / llama-cpp-python).
-# Modelo: https://huggingface.co/taronaeo/Granite-3.3-2B-Instruct-BE-GGUF
+# Granite 3.3 2B Instruct big-endian for s390x (llama.cpp / llama-cpp-python).
+# Model: https://huggingface.co/taronaeo/Granite-3.3-2B-Instruct-BE-GGUF
 DEFAULT_MODEL_PATH = os.path.expanduser(
     "~/shared/models/granite-3.3-2b-instruct-be.Q4_K_M.gguf"
 )
 
-# Granite solo redacta el resumen y las 2 acciones (lo que aporta lenguaje natural).
-# technical_details se construye en codigo con las cifras exactas: mas rapido y sin
-# riesgo de cifras inventadas.
+# Granite only writes the summary and the 2 actions (the natural-language part).
+# technical_details is built in code with the exact figures: faster and with no
+# risk of invented numbers.
 GBNF_GRAMMAR = r'''
 root ::= "{" ws "\"summary\":" ws string "," ws "\"recommended_actions\":" ws "[" ws string "," ws string ws "]" ws "}"
 string ::= "\"" ([^"\\\n] | "\\" ["\\/bfnrt])* "\""
 ws ::= [ \t\n]*
 '''
 
-# Hilos de CPU para Granite (configurable con LLM_THREADS).
-# En maquinas pequenas (la VM LinuxONE tiene 3 CPUs, 1 hilo por nucleo) se usan todas;
-# en portatiles con hyperthreading, la mitad suele ir mas rapido.
+# CPU threads for Granite (configurable with LLM_THREADS).
+# On small machines (the LinuxONE VM has 3 CPUs, 1 thread per core) all are used;
+# on laptops with hyperthreading, half is usually faster.
 _CPUS = os.cpu_count() or 1
 LLM_THREADS = int(os.getenv("LLM_THREADS", _CPUS if _CPUS <= 4 else _CPUS // 2))
 CACHE_MAX_ITEMS = 256
 
 LEVEL_GUIDANCE = {
-    "Stable": "La red esta estable: dilo claramente y no hables de riesgo alto. "
-              "Las acciones son de supervision rutinaria.",
-    "Watch": "Riesgo MODERADO (no alto) de inestabilidad: recomienda vigilancia y preparacion.",
-    "Critical": "Riesgo alto de inestabilidad de frecuencia: recomienda acciones preventivas.",
+    "Stable": "The grid is stable: say so clearly and do not talk about high risk. "
+              "Actions are routine monitoring.",
+    "Watch": "MODERATE risk (not high) of instability: recommend vigilance and preparation.",
+    "Critical": "High risk of frequency instability: recommend preventive actions.",
 }
 
 FACTOR_LABELS = {
-    "inertia_est_gws": "inercia estimada baja",
-    "nonsync_share": "cuota alta de eolica y solar",
-    "interconnection_balance_mw": "saldo de interconexion elevado",
+    "inertia_est_gws": "low estimated inertia",
+    "nonsync_share": "high share of wind and solar",
+    "interconnection_balance_mw": "high cross-border exchange",
 }
 
 SYSTEM_PROMPT = (
-    "Eres el asistente de GridZ Shield, que apoya a los operadores de la red electrica "
-    "peninsular espanola. Solo das apoyo a la decision: nunca controlas la red. "
-    "Explicas el riesgo de baja inercia de forma breve y clara, en espanol. "
-    "Usa unicamente las cifras que te dan; no inventes datos. "
-    "Responde en JSON con: summary (una sola frase corta que explique por que hay ese "
-    "nivel de riesgo) y recommended_actions (exactamente 2 acciones concretas para el "
-    "operador, de menos de 15 palabras cada una)."
+    "You are the GridZ Shield assistant, supporting operators of the Spanish peninsular "
+    "power grid. You only provide decision support: you never control the grid. "
+    "You explain the risk of low inertia briefly and clearly, in English. "
+    "Use only the figures you are given; do not invent data. "
+    "Answer in JSON with: summary (one short sentence explaining why the risk level is "
+    "what it is) and recommended_actions (exactly 2 concrete actions for the "
+    "operator, under 15 words each)."
 )
 
 
 def _band(value: float, low: float, high: float, low_label: str, high_label: str) -> str:
-    """Clasifica un valor frente a los percentiles 25 y 75 de 2021-2024."""
+    """Classifies a value against the 25th and 75th percentiles of 2021-2024."""
     if value < low:
         return low_label
     if value > high:
@@ -68,20 +68,20 @@ class GraniteExplainer:
         self.llm = None
         self.grammar = None
         self.load_error = None
-        # llama.cpp no admite llamadas concurrentes sobre el mismo modelo
+        # llama.cpp does not support concurrent calls on the same model
         self._lock = threading.Lock()
-        # Misma peticion -> misma explicacion (el replay de la demo no espera dos veces)
+        # Same request -> same explanation (the demo replay never waits twice)
         self._cache: dict = {}
 
         if not os.path.exists(model_path):
-            self.load_error = f"No se encontro el modelo Granite en {model_path}"
-            print(f"[!] {self.load_error}. /explain usara reglas.")
+            self.load_error = f"Granite model not found at {model_path}"
+            print(f"[!] {self.load_error}. /explain will use rules.")
             return
 
         try:
             from llama_cpp import Llama, LlamaGrammar
 
-            # El modelo se carga una sola vez, al arrancar la API.
+            # The model is loaded once, when the API starts.
             self.llm = Llama(
                 model_path=model_path,
                 n_ctx=n_ctx,
@@ -89,11 +89,11 @@ class GraniteExplainer:
                 verbose=False,
             )
             self.grammar = LlamaGrammar.from_string(GBNF_GRAMMAR, verbose=False)
-            print(f"[OK] Granite cargado: {model_path}")
+            print(f"[OK] Granite loaded: {model_path}")
         except Exception as e:
             self.llm = None
             self.load_error = f"{type(e).__name__}: {e}"
-            print(f"[!] Granite NO cargado -> {self.load_error}. /explain usara reglas.")
+            print(f"[!] Granite NOT loaded -> {self.load_error}. /explain will use rules.")
 
     @property
     def available(self) -> bool:
@@ -101,85 +101,85 @@ class GraniteExplainer:
 
     def _build_user_prompt(self, data: ExplanationRequest) -> str:
         lines = [
-            f"Nivel de riesgo previsto para manana: {data.level} "
-            f"(puntuacion {data.risk_score:.2f} sobre 1).",
+            f"Predicted risk level for tomorrow: {data.level} "
+            f"(score {data.risk_score:.2f} out of 1).",
         ]
         if data.top_factors:
             labels = [FACTOR_LABELS.get(f, f) for f in data.top_factors]
-            lines.append(f"Factores principales: {', '.join(labels)}.")
+            lines.append(f"Main factors: {', '.join(labels)}.")
         else:
-            lines.append("Ningun factor esta fuera de lo normal.")
+            lines.append("No factor is outside the norm.")
 
-        # Las comparaciones se hacen aqui (percentiles 2021-2024): un modelo de 2B
-        # interpreta mal los numeros, asi que recibe la conclusion ya hecha.
+        # Comparisons are made here (2021-2024 percentiles): a 2B model
+        # misreads numbers, so it receives the conclusion already drawn.
         if data.inertia_est_gws is not None:
             lines.append(
-                f"Inercia estimada: {data.inertia_est_gws:.1f} GW*s, "
-                f"{_band(data.inertia_est_gws, 73.5, 94.1, 'BAJA (peor de lo normal)', 'ALTA (mejor de lo normal)')}."
+                f"Estimated inertia: {data.inertia_est_gws:.1f} GW*s, "
+                f"{_band(data.inertia_est_gws, 73.5, 94.1, 'LOW (worse than normal)', 'HIGH (better than normal)')}."
             )
         if data.nonsync_share is not None:
             lines.append(
-                f"Generacion eolica y solar: {data.nonsync_share:.0%} del total, "
-                f"{_band(data.nonsync_share, 0.304, 0.464, 'BAJA', 'ALTA')}."
+                f"Wind and solar generation: {data.nonsync_share:.0%} of the total, "
+                f"{_band(data.nonsync_share, 0.304, 0.464, 'LOW', 'HIGH')}."
             )
         if data.rocof_est_hz_s is not None:
             lines.append(
-                f"RoCoF estimado si se perdiera de golpe una central de 1.000 MW "
-                f"(escenario hipotetico, no ha ocurrido): {data.rocof_est_hz_s:.3f} Hz/s, "
-                f"{_band(data.rocof_est_hz_s, 0.266, 0.340, 'BAJO (mejor de lo normal)', 'ALTO (peor de lo normal)')}."
+                f"Estimated RoCoF if a 1,000 MW plant were suddenly lost "
+                f"(hypothetical scenario, it has not happened): {data.rocof_est_hz_s:.3f} Hz/s, "
+                f"{_band(data.rocof_est_hz_s, 0.266, 0.340, 'LOW (better than normal)', 'HIGH (worse than normal)')}."
             )
         if data.interconnection_balance_mw is not None:
-            sentido = "EXPORTA" if data.interconnection_balance_mw < 0 else "IMPORTA"
-            volumen = "elevado" if abs(data.interconnection_balance_mw) > 2630 else "normal"
+            direction = "EXPORTS" if data.interconnection_balance_mw < 0 else "IMPORTS"
+            volume = "high" if abs(data.interconnection_balance_mw) > 2630 else "normal"
             lines.append(
-                f"Intercambio internacional: Espana {sentido} {abs(data.interconnection_balance_mw):.0f} MW (volumen {volumen})."
+                f"Cross-border exchange: Spain {direction} {abs(data.interconnection_balance_mw):.0f} MW (volume {volume})."
             )
         if data.demand_mw is not None:
-            lines.append(f"Demanda media: {data.demand_mw:.0f} MW.")
+            lines.append(f"Average demand: {data.demand_mw:.0f} MW.")
         if data.is_simulated:
-            lines.append("Atencion: son datos simulados.")
+            lines.append("Warning: this is simulated data.")
         lines.append(LEVEL_GUIDANCE.get(data.level, ""))
         return "\n".join(lines)
 
     @staticmethod
     def _technical_details(data: ExplanationRequest) -> str:
-        """Cifras exactas del dia, sin pasar por el LLM."""
+        """Exact figures for the day, without going through the LLM."""
         parts = []
         if data.inertia_est_gws is not None:
-            parts.append(f"Inercia estimada {data.inertia_est_gws:.1f} GW·s")
+            parts.append(f"Estimated inertia {data.inertia_est_gws:.1f} GW·s")
         if data.rocof_est_hz_s is not None:
-            parts.append(f"RoCoF estimado {data.rocof_est_hz_s:.3f} Hz/s ante la pérdida de 1.000 MW")
+            parts.append(f"estimated RoCoF {data.rocof_est_hz_s:.3f} Hz/s on a 1,000 MW loss")
         if data.nonsync_share is not None:
-            parts.append(f"eólica y solar {data.nonsync_share:.0%} de la generación")
+            parts.append(f"wind and solar {data.nonsync_share:.0%} of generation")
         if data.interconnection_balance_mw is not None:
-            sentido = "exportación" if data.interconnection_balance_mw < 0 else "importación"
-            parts.append(f"saldo de interconexión {abs(data.interconnection_balance_mw):.0f} MW en {sentido}")
-        factors = ", ".join(data.top_factors) or "ninguno fuera de lo normal"
-        detail = f"Factores dominantes: {factors}."
+            direction = "export" if data.interconnection_balance_mw < 0 else "import"
+            parts.append(f"cross-border balance {abs(data.interconnection_balance_mw):.0f} MW ({direction})")
+        factors = ", ".join(FACTOR_LABELS.get(f, f) for f in data.top_factors) or "none outside the norm"
+        detail = f"Dominant factors: {factors}."
         if parts:
             detail += " " + "; ".join(parts) + "."
         return detail
 
     def _rule_based_fallback(self, data: ExplanationRequest, reason: str) -> ExplanationResponse:
         actions_map = {
-            "nonsync_share": "Monitorear inercia y preparar reservas síncronas.",
-            "interconnection_balance_mw": "Ajustar flujos en el enlace de interconexión.",
-            "inertia_est_gws": "Activar inercia sintética o potencia síncrona."
+            "nonsync_share": "Monitor inertia and prepare synchronous reserves.",
+            "interconnection_balance_mw": "Adjust flows on the cross-border interconnection.",
+            "inertia_est_gws": "Activate synthetic inertia or synchronous power."
         }
         actions = [actions_map[f] for f in data.top_factors if f in actions_map]
         if not actions:
-            actions = ["Mantener supervisión de telemetría."]
+            actions = ["Maintain routine telemetry monitoring."]
 
         return ExplanationResponse(
-            summary=f"Estado {data.level}: Puntuación de riesgo en {data.risk_score:.2f}.",
+            summary=f"Status {data.level}: risk score {data.risk_score:.2f} out of 1.",
             recommended_actions=actions[:2],
-            technical_details=f"{self._technical_details(data)} (Modo reglas: {reason})",
+            technical_details=f"{self._technical_details(data)} (Rules mode: Granite unavailable on this architecture)",
             source="rules",
         )
 
     def explain(self, data: ExplanationRequest) -> ExplanationResponse:
         if not self.available:
-            return self._rule_based_fallback(data, self.load_error or "Granite no disponible")
+            return self._rule_based_fallback(data, self.load_error or "Granite unavailable")
 
         cache_key = data.model_dump_json()
         if cache_key in self._cache:
@@ -208,4 +208,5 @@ class GraniteExplainer:
             self._cache[cache_key] = response
             return response
         except Exception as e:
-            return self._rule_based_fallback(data, f"fallo de Granite ({type(e).__name__}: {e})")
+            return self._rule_based_fallback(data, f"Granite failure ({type(e).__name__}: {e})")
+            

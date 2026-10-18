@@ -1,9 +1,0 @@
-venv/
-.venv/
-*.parquet
-*.joblib
-*.gguf
-*.pem
-.env
-__pycache__/
-.pytest_cache/

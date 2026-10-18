@@ -63,8 +63,7 @@ All commands run in the **Jupyter Lab terminal** of the VM (inside the container
 
 ```bash
 # 0. Check the environment (libraries are already in the container image)
-uname -m                                   # s390x
-python3 -c "import pandas, sklearn, fastparquet, fastapi, uvicorn, llama_cpp; print('OK')"
+python3 check_env.py                       # s390x, big-endian, all libraries OK
 
 # 1. Granite 3.3 2B Instruct, big-endian (1.55 GB, once)
 mkdir -p ~/shared/models
@@ -120,6 +119,7 @@ Without `llama-cpp-python` or the Granite file, everything works the same and `/
 | `explain/` | Granite explanation layer (llama-cpp-python, GBNF-constrained JSON, rule-based fallback) |
 | `app/` | Operator dashboard (`/app`), replay data and the Granite pre-generation script |
 | `docs/` | Architecture diagram (`architecture.svg` / `.png`) and screenshots |
+| `check_env.py` | Environment check: CPU architecture, byte order and required libraries |
 
 Module contracts (columns, JSON formats and endpoints) are in [ARCHITECTURE.md](ARCHITECTURE.md); project rules are in [CONTEXT.md](CONTEXT.md).
 

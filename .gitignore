@@ -20,8 +20,10 @@ venv/
 data/raw/
 data/*.csv
 data/*.parquet
+*.parquet
 !data/**/.gitkeep
 models/*.gguf
+*.gguf
 *.joblib
 *.onnx
 

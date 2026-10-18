@@ -1,3 +1,5 @@
+import platform
+
 from fastapi import FastAPI, HTTPException, status
 from service.schemas import TelemetryInput, InferenceResponse
 from service.utils import GridPredictor
@@ -60,4 +62,3 @@ def explain_risk(payload: ExplanationRequest):
         return explainer.explain(payload)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-        

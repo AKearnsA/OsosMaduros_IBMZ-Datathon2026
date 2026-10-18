@@ -45,7 +45,7 @@ Measured frequency and RoCoF (`frequency_hz`, `rocof_hz_s`) were removed: no ope
 ## Model (`model/train.py`)
 - **Target:** next day's `rocof_est_hz_s` (regression).
 - **Features:** the parquet columns above (except labels) plus `rocof_lag1`, `nonsync_share_lag1` (previous day), `rocof_roll7_mean`, `nonsync_roll7_mean` (7-day means), `day_of_week`, `month`.
-- **Split:** train 2021–2024, test 2025 (by date, no shuffling). The blackout day (`label_event == 1`) is excluded.
+- **Split:** train 2021–2024, test 2025 (by date, no shuffling). The split uses the UTC year of `timestamp`, so 1 January 2025 (local) falls in the training set; the test set is 2 January to 30 December 2025 (362 days). The blackout day (`label_event == 1`) is excluded.
 - **Models:** `RandomForestRegressor` (forecast) and `IsolationForest` (unusual days).
 - **Risk thresholds:** 75th and 95th percentiles of the training target, stored in the artifact.
 - **Artifact** (`grid_model.joblib`, a dict): `regressor_model`, `anomaly_model`, `feature_names`, `anomaly_feature_names`, `percentile_75`, `percentile_95`, `train_rocof_distribution`.

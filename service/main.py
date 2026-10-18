@@ -1,3 +1,5 @@
+import platform
+
 from fastapi import FastAPI, HTTPException, status
 from service.schemas import TelemetryInput, InferenceResponse
 from service.utils import GridPredictor
@@ -14,12 +16,12 @@ except Exception as e:
 
 @app.get("/health", status_code=status.HTTP_200_OK)
 def health_check():
-    return {"status": "ok", "model_loaded": predictor is not None, "arch": "s390x"}
+    return {"status": "ok", "model_loaded": predictor is not None, "arch": platform.machine()}
 
 @app.post("/predict", response_model=InferenceResponse, status_code=status.HTTP_200_OK)
 def predict_risk(telemetry: TelemetryInput):
     if predictor is None:
-        raise HTTPException(status_code=533, detail="Modelo no disponible.")
+        raise HTTPException(status_code=503, detail="Modelo no disponible.")
     
     try:
         data = telemetry.model_dump()

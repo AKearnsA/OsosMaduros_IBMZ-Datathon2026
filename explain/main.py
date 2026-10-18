@@ -1,9 +1,7 @@
-from fastapi import FastAPI, status
 from explain.schemas import ExplanationRequest, ExplanationResponse
-from explain.generator import RiskExplainer
+from explain.generator import GraniteExplainer
 
-# Si se agrega en el main existente:
-explainer = RiskExplainer()
+explainer = GraniteExplainer()
 
 @app.post("/explain", response_model=ExplanationResponse, status_code=status.HTTP_200_OK)
 def explain_risk(payload: ExplanationRequest):

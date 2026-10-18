@@ -19,3 +19,8 @@ fastapi>=0.110
 uvicorn>=0.29
 pydantic>=2.5
 python-dotenv>=1.0
+
+# explain/
+# En LinuxONE ya viene en el contenedor de Jupyter (compilado para s390x con zDNN);
+# pip no lo recompila si la version instalada cumple la cota.
+llama-cpp-python>=0.3
